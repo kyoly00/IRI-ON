@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
-import models, schemas
+import models
+from schemas.user_profile_create import UserProfileCreate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 # 프로필 생성
 @router.post("/profile")
-def create_user_profile(user: schemas.UserProfileCreate, db: Session = Depends(get_db)):
+def create_user_profile(user: UserProfileCreate, db: Session = Depends(get_db)):
     db_user = models.user.User(
         id=user.user_id,
         name=user.name,
-        age=user.age,
+        # age=user.age,
         can_use_fire=user.can_use_fire,
         can_use_knife=user.can_use_knife,
         allergy=user.allergy
