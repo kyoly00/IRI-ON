@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, func
-from sqlalchemy.dialects.mysql import BIGINT, SMALLINT, TIMESTAMP, TEXT, DECIMAL
+from sqlalchemy import Column, String, func, Enum
+from sqlalchemy.dialects.mysql import BIGINT, SMALLINT, TIMESTAMP, TEXT
 from db.base import Base
+import enum
 
 class Difficulty(enum.Enum):
     ANY = "아무나"
@@ -17,8 +18,8 @@ class Recipe(Base):
     description = Column(TEXT)
     image_url = Column(String(255))
     time = Column(SMALLINT)
-    servings = Column(DECIMAL(3, 1))
-    difficulty = Column(Difficulty)
+    servings = Column(SMALLINT)
+    difficulty = Column(Enum(Difficulty))
     instructions = Column(TEXT, nullable=False)
     created_at = Column(TIMESTAMP, nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
