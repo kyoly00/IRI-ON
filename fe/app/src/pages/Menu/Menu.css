@@ -1,0 +1,140 @@
+.menu-page {
+  background: #faf7f0;
+  min-height: 100vh;
+  padding: 20px;
+  padding-bottom: 100px; /* 버튼 공간 확보 */
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 20px;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 50px;
+  padding: 8px 14px;
+  margin: 15px 0;
+  box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
+}
+.search-bar input {
+  border: none;
+  outline: none;
+  margin-left: 8px;
+  flex: 1;
+}
+.search-icon {
+  color: #FF9844;
+}
+
+
+
+.category-bar {
+  display: flex;
+  background: #ffffff; /* 바탕 흰색 */
+  border-radius: 50px;
+  padding: 6px;
+  margin-bottom: 20px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+}
+
+.category-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 50px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #000; /* 기본 글씨 검정 */
+  transition: all 0.2s ease;
+}
+
+/* 선택된 카테고리 스타일 */
+.category-btn.active {
+  background: linear-gradient(92.74deg, #FFB173 9.43%, #FF9844 96.54%);
+  color: white;
+  box-shadow: 0px 4px 8px rgba(253, 160, 85, 0.35);
+}
+
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-card {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 16px;
+  padding: 12px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+.menu-card:hover {
+  transform: translateY(-2px);
+}
+.menu-card.selected {
+  border: 2px solid #FF9844;
+  background: #fffaf4;
+}
+
+.menu-img {
+  width: 45px;
+  height: 45px;
+  border-radius: 8px;
+  margin-right: 12px;
+}
+
+.menu-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-name {
+  font-weight: bold;
+}
+
+.menu-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: gray;
+}
+
+.bottom-btn-wrapper {
+  position: fixed;
+  bottom: 120px;
+  width: 100%;
+  left: 0;
+  display: flex;
+  justify-content: center;
+}
+
+ .start-btn {
+  position: fixed;
+  bottom: 120px;
+  width: 327px;      /* 버튼 가로 크기 */
+  height: 56px;      /* 버튼 세로 크기 */
+
+  background: linear-gradient(92.74deg, #FFB173 9.43%, #FF9844 96.54%);
+  box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.35);
+  border-radius: 100px;
+
+  border: none;
+  color: white;
+  font-weight: bold;
+  font-size: 18px;   /* 폰트 크기도 키움 */
+  cursor: pointer;
+
+  display: flex;     /* 텍스트 가운데 정렬 */
+  align-items: center;
+  justify-content: center;
+}
+
