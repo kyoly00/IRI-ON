@@ -1,21 +1,23 @@
+from typing import List
 from fastapi import APIRouter, Depends
-from models.user import user
 from sqlalchemy.orm import Session
+
 from db.session import get_db
-import models
+from crud import recipe_crud
+from schemas.recipe_schema import RecipeSchema
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 # 전체 레시피 조회
-@router.get("/")
+@router.get("/", response_model=List[RecipeSchema])
 def get_all_recipes(db: Session = Depends(get_db)):
-    recipes = db.query(models.recipe.Recipe).all()
+    recipes = recipe_crud.get_all_recipes(db)
     return recipes
 
 # 특정 레시피 조회
-@router.get("/{recipe_id}")
+@router.get("/{recipe_id}", response_model=RecipeSchema)
 def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    recipe = db.query(models.recipe.Recipe).filter(models.recipe.Recipe.recipe_id == recipe_id).first()
+    recipe = recipe_crud.get_recipe_by_id(db, recipe_id)
     return recipe
 
 # # 특정 레시피를 프로필 기반으로 보조하는 요리 보조 ai 호출
