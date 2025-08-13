@@ -3,3 +3,5 @@ fastapi uvicorn
 sqlalchemy
 dotenv
 pymysql
+requests>=2.31.0
+openai
