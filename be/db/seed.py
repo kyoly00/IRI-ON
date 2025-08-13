@@ -12,33 +12,37 @@ difficulty_map = {
 
 def seed():
     db = SessionLocal()
+    try:
+        with open("data/recipes.csv", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if db.query(Recipe).count() == 0:    
+                existing_names = {r.name for r in db.query(Recipe.name).all()}
 
-    with open("data/recipes.csv", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if db.query(Recipe).count() == 0:
-            
-            for row in reader:
-                if db.query(Recipe).filter(Recipe.name == row["title"]).first():
-                    continue
+                for row in reader:
+                    if row["title"] in existing_names:
+                        continue
 
-                diff_value = difficulty_map.get(row["difficulty"])
-                if not diff_value:
-                    # 매핑 안 되는 값 처리 (예: 기본값 or 스킵)
-                    continue
-                
-                recipe = Recipe(
-                    name=row["title"],
-                    description=row["description"],
-                    image_url=row["main_image"],
-                    time=int(row["time"]) if row["time"].isdigit() else None,
-                    servings=int(row["servings"]) if row["servings"].isdigit() else None,
-                    difficulty=diff_value,
-                    instructions=row["steps"],
-                    tools=row["tools"],
-                    materials=row["materials"],
-                    tips=row["tips"],
-                )
-                db.add(recipe)
+                    diff_value = difficulty_map.get(row["difficulty"])
+                    if not diff_value:
+                        continue
 
-                db.commit()
-    db.close()
+                    recipe = Recipe(
+                        name=row["title"],
+                        description=row["description"],
+                        image_url=row["main_image"],
+                        time=int(row["time"]) if row["time"].isdigit() else None,
+                        servings=int(row["servings"]) if row["servings"].isdigit() else None,
+                        difficulty=diff_value,
+                        instructions=row["steps"],
+                        tools=row["tools"],
+                        materials=row["materials"],
+                        tips=row["tips"],
+                    )
+                    db.add(recipe)
+                    existing_names.add(row["title"])
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
