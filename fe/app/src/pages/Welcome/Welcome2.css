@@ -1,12 +1,10 @@
-/* 컨테이너 (하단 네비랑 안 겹치게 패딩) */
 .profile-page {
   padding: 20px;
-  padding-bottom: 110px; /* 하단 고정 네비 피하기 */
+  padding-bottom: 110px;
   max-width: 420px;
   margin: 0 auto;
 }
 
-/* 타이틀 */
 .profile-title {
   text-align: center;
   font-size: 18px;
@@ -15,7 +13,6 @@
   margin: 8px 0 14px;
 }
 
-/* 카드 느낌의 박스 */
 .profile-card {
   background: #ffffff;
   border-radius: 22px;
@@ -23,7 +20,6 @@
   box-shadow: 0 8px 30px rgba(0,0,0,0.06);
 }
 
-/* 아바타 */
 .avatar-box {
   width: 140px;
   height: 140px;
@@ -41,7 +37,6 @@
   border-radius: 50%;
 }
 
-/* 이름 입력 */
 .name-input {
   width: 100%;
   padding: 10px 12px;
@@ -58,7 +53,6 @@
   background: #fff;
 }
 
-/* 두 개 토글 버튼 */
 .toggle-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -83,7 +77,6 @@
 .toggle-btn.active-fire { background:#fff3e6; border-color:#ff9800; color:#9a4d00; }
 .toggle-btn.active-knife{ background:#eaf2ff; border-color:#2b76ff; color:#204c9f; }
 
-/* 알레르기 */
 .allergy-header {
   display: flex;
   align-items: center;
@@ -117,7 +110,6 @@
   box-shadow: 0 2px 6px rgba(255,152,0,0.25);
 }
 
-/* 생성 버튼 */
 .submit-wrap { max-width: 420px; margin: 14px auto 0; }
 .submit-btn {
   width: 100%;
