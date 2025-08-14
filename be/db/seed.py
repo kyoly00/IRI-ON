@@ -1,13 +1,22 @@
 # seed.py
 import csv
 from db.session import SessionLocal
-from models.recipe.recipe import Recipe, Difficulty
+from models.recipe.recipe import Recipe, Difficulty, Category
 
 difficulty_map = {
     "초급": Difficulty.EASY,
     "아무나": Difficulty.ANY,
     "중급": Difficulty.MEDIUM,
     "고급": Difficulty.HARD,
+}
+
+category_map = {
+    "한식": Category.KOREAN,
+    "중식": Category.CHINESE,
+    "일식": Category.JAPANESE,
+    "양식": Category.WESTERN,
+    "간식": Category.SNACK,
+    "기타": Category.OTHER,
 }
 
 def seed():
@@ -26,6 +35,10 @@ def seed():
                     if not diff_value:
                         continue
 
+                    category_value = category_map.get(row["category"])
+                    if not category_value:
+                        continue
+
                     recipe = Recipe(
                         name=row["title"],
                         description=row["description"],
@@ -34,6 +47,7 @@ def seed():
                         servings=int(row["servings"]) if row["servings"].isdigit() else None,
                         difficulty=diff_value,
                         instructions=row["steps"],
+                        category=category_value,
                         tools=row["tools"],
                         materials=row["materials"],
                         tips=row["tips"],
