@@ -1,42 +1,93 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./Fridge.css";
-import { FaSearch, FaArrowRight } from "react-icons/fa";
-import { useNavigate } from "react-router-dom"; // ✅ 추가
+import { FaSearch } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 export default function Fridge() {
   const [selected, setSelected] = useState([]);
-  const [popupItem, setPopupItem] = useState(null);
-  const [amount, setAmount] = useState("");
-  const navigate = useNavigate(); // ✅ 추가
+  const [ingredients, setIngredients] = useState([]); // 백엔드에서 불러올 재료
+  const navigate = useNavigate();
 
-  const ingredients = [
-    { id: 1, name: "소고기", img: "/images/beef.png" },
-    { id: 2, name: "감자", img: "/images/potato.png" },
-    { id: 3, name: "당근", img: "/images/carrot.png" },
-    { id: 4, name: "레몬", img: "/images/lemon.png" },
-    { id: 5, name: "브로콜리", img: "/images/broccoli.png" },
-    { id: 6, name: "양파", img: "/images/onion.png" },
-    { id: 7, name: "카레가루", img: "/images/curry.png" },
-    { id: 8, name: "닭가슴살", img: "/images/chicken.png" },
-    { id: 9, name: "대파", img: "/images/leek.png" },
-  ];
+  // 📌 페이지 로드 시 재료 불러오기
+  useEffect(() => {
+    const fetchIngredients = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/ingredients/"); // ✅ 수정된 경로
+        if (!res.ok) throw new Error("서버 응답 오류");
+        const data = await res.json();
+        setIngredients(data);
+      } catch (err) {
+        console.error("❌ 재료 불러오기 실패:", err);
+      }
+    };
+    fetchIngredients();
+  }, []);
 
+  // 재료 선택 토글
   const handleSelect = (item) => {
     setSelected((prev) =>
-      prev.includes(item.id)
-        ? prev.filter((x) => x !== item.id)
-        : [...prev, item.id]
+      prev.includes(item.ingredient_id)
+        ? prev.filter((x) => x !== item.ingredient_id)
+        : [...prev, item.ingredient_id]
     );
-    setPopupItem(item);
-    setAmount("");
   };
 
-  const closePopup = () => {
-    setPopupItem(null);
-  };
+  // 선택된 재료 서버에 저장 후 이동
+  const goToComplete = async () => {
+    // 1. fridge 저장용 payload
+    const selectedData = ingredients
+      .filter((item) => selected.includes(item.ingredient_id))
+      .map((item) => ({
+        ingredient_id: item.ingredient_id,
+        name: item.name,
+      }));
 
-  const goToComplete = () => {
-    navigate("/fridgecomplete"); // ✅ 이동
+    // 2. users/ingredients 저장용 payload
+    const userIngredientData = selected.map((id) => ({
+      user_id: 1, // 🔹 로그인 사용자 ID로 교체 필요
+      ingredient_id: id,
+    }));
+
+    try {
+      // 📌 첫 번째 API: fridge 저장
+      const fridgeUrl = "http://localhost:8000/api/fridge";
+      console.log("→ POST", fridgeUrl, selectedData);
+      const res1 = await fetch(fridgeUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selectedData),
+      });
+
+      if (!res1.ok) {
+        const raw = await res1.text();
+        console.error("❌ fridge 저장 실패:", res1.status, res1.statusText, raw);
+        alert(`저장 실패 (HTTP ${res1.status})`);
+        return;
+      }
+
+      // 📌 두 번째 API: users/ingredients 저장
+      const userIngredientsUrl = "http://localhost:8000/users/ingredients";
+      console.log("→ POST", userIngredientsUrl, userIngredientData);
+      const res2 = await fetch(userIngredientsUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userIngredientData),
+      });
+
+      if (!res2.ok) {
+        const raw = await res2.text();
+        console.error("❌ users/ingredients 저장 실패:", res2.status, res2.statusText, raw);
+        alert(`저장 실패 (HTTP ${res2.status})`);
+        return;
+      }
+
+      console.log("✅ 모든 저장 성공");
+      alert("재료 저장 완료!");
+      navigate("/fridgecomplete");
+    } catch (error) {
+      console.error("❌ 네트워크/코르스 에러:", error);
+      alert("저장 실패 (네트워크/CORS)");
+    }
   };
 
   return (
@@ -58,18 +109,22 @@ export default function Fridge() {
 
       {/* 재료 목록 */}
       <div className="ingredient-grid">
-        {ingredients.map((item) => (
-          <div
-            key={item.id}
-            className={`ingredient-card ${
-              selected.includes(item.id) ? "selected" : ""
-            }`}
-            onClick={() => handleSelect(item)}
-          >
-            <img src={item.img} alt={item.name} />
-            <span>{item.name}</span>
-          </div>
-        ))}
+        {ingredients.length > 0 ? (
+          ingredients.map((item) => (
+            <div
+              key={item.ingredient_id}
+              className={`ingredient-card ${
+                selected.includes(item.ingredient_id) ? "selected" : ""
+              }`}
+              onClick={() => handleSelect(item)}
+            >
+              <img src={item.img} alt={item.name} />
+              <span>{item.name}</span>
+            </div>
+          ))
+        ) : (
+          <p>재료를 불러오는 중...</p>
+        )}
       </div>
 
       {/* 하단 버튼 */}
@@ -84,32 +139,6 @@ export default function Fridge() {
         <div className="nav-item">메뉴</div>
         <div className="nav-item">프로필</div>
       </nav>
-
-      {/* 팝업 */}
-      {popupItem && (
-        <div className="popup-overlay">
-          <div className="popup-card">
-            <img src={popupItem.img} alt={popupItem.name} />
-            <p>
-              정확한 레시피 추천을 위해<br />남은 양을 알려주세요.
-            </p>
-
-            {/* 입력창 + 버튼 래퍼 */}
-            <div className="amount-input-wrapper">
-              <input
-                className="amount-input"
-                type="text"
-                placeholder="예) 2개, 500ml, 300g"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <button className="amount-btn" onClick={closePopup}>
-                <FaArrowRight />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
