@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models.recipe import Recipe
+from models.recipe.recipe import Recipe
 
 def get_all_recipes(db: Session):
     return db.query(
@@ -17,11 +17,4 @@ def get_recipe_by_id(db: Session, recipe_id: int):
         Recipe.name,
         Recipe.time,
         Recipe.category
-        ).filter(Recipe.recipe_id == recipe_id).first()
-
-def get_ingredients_by_id(db: Session, recipe_id: int):
-    return db.query(
-        Recipe.recipe_id,
-        Recipe.name,
-        Recipe.materials,
         ).filter(Recipe.recipe_id == recipe_id).first()
