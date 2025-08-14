@@ -5,9 +5,8 @@ import Home from "./pages/Home/Home.jsx";
 import Menu from "./pages/Menu/Menu.jsx";
 import Fridge from "./pages/Fridge/Fridge.jsx";
 import FridgeComplete from "./pages/FridgeComplete/FridgeComplete.jsx";
-import CookingExplain from "./pages/CookingExplain/CookingExplain.jsx"; 
-import Welcome from "./pages/Welcome/Welcome.jsx";
-import Welcome2 from "./pages/Welcome/Welcome2.jsx";
+import CookingExplain from "./pages/CookingExplain/CookingExplain.jsx";
+
 import "./index.css";
 
 export default function App() {
@@ -18,6 +17,7 @@ export default function App() {
           <Routes>
             {/* 온보딩 화면 (하단바 없음) */}
             <Route path="/" element={<Welcome />} />
+            <Route path="/welcome1" element={<Welcome1 />} />   {/* ✅ 추가 */}
             <Route path="/welcome2" element={<Welcome2 />} />
 
             {/* 하단바 있는 페이지 */}

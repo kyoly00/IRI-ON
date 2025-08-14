@@ -6,7 +6,6 @@ import { FaSearch, FaClock } from "react-icons/fa";
 const categories = ["전체", "한식", "중식", "일식", "양식", "간편식", "기타"];
 
 export default function Menu() {
-  // 백엔드 없이 기본 메뉴 데이터
   const [menuList] = useState([
     { recipe_id: 1, name: "김치찌개", time: 30, image_url: "/images/kimchi.png", category: "한식" },
     { recipe_id: 2, name: "된장찌개", time: 25, image_url: "/images/soybean.png", category: "한식" },
@@ -20,9 +19,9 @@ export default function Menu() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("전체");
+  const [viewMode, setViewMode] = useState("전체"); // 전체 or 맞춤형
   const navigate = useNavigate();
 
-  // 버튼 클릭 시 CookingExplain 페이지로 이동
   const handleStartCooking = () => {
     if (selectedId) {
       navigate(`/CookingExplain/${selectedId}`);
@@ -33,6 +32,22 @@ export default function Menu() {
 
   return (
     <div className="menu-page">
+      {/* 상단 보기 모드 버튼 */}
+      <div className="view-toggle">
+        <button
+          className={`view-btn ${viewMode === "전체" ? "active" : ""}`}
+          onClick={() => setViewMode("전체")}
+        >
+          전체 메뉴보기
+        </button>
+        <button
+          className={`view-btn ${viewMode === "맞춤형" ? "active" : ""}`}
+          onClick={() => setViewMode("맞춤형")}
+        >
+          맞춤형 메뉴보기
+        </button>
+      </div>
+
       <h2 className="title">오늘의 메뉴를 선택하세요!</h2>
 
       {/* 검색창 */}
