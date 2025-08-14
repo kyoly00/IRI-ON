@@ -9,6 +9,14 @@ class Difficulty(enum.Enum):
     MEDIUM = "중급"
     HARD = "고급"
 
+class Category(enum.Enum):
+    KOREAN = "한식"
+    CHINESE = "중식"
+    JAPANESE = "일식"
+    WESTERN = "양식"
+    SNACK = "간식"
+    OTHER = "기타"
+
 class Recipe(Base):
     __tablename__ = "recipe"
 
@@ -21,6 +29,7 @@ class Recipe(Base):
     servings = Column(SMALLINT)
     difficulty = Column(Enum(Difficulty))
     instructions = Column(TEXT, nullable=False)
+    category = Column(Enum(Category))
     created_at = Column(TIMESTAMP, nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
     tools = Column(TEXT)

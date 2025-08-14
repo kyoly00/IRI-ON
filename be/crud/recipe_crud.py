@@ -7,6 +7,7 @@ def get_all_recipes(db: Session):
         Recipe.image_url,
         Recipe.name,
         Recipe.time,
+        Recipe.category
     ).all()
 
 def get_recipe_by_id(db: Session, recipe_id: int):
@@ -15,6 +16,7 @@ def get_recipe_by_id(db: Session, recipe_id: int):
         Recipe.image_url,
         Recipe.name,
         Recipe.time,
+        Recipe.category
         ).filter(Recipe.recipe_id == recipe_id).first()
 
 def get_ingredients_by_id(db: Session, recipe_id: int):
