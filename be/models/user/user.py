@@ -7,9 +7,7 @@ class User(Base):
 
     user_id = Column(BIGINT, primary_key=True, autoincrement=True, index=True)
 
-    id = Column(String(20), nullable=False, unique=True)
-    password = Column(String(100), nullable=False)
-    name = Column(String(20), default="셰프")
+    name = Column(String(20), nullable=False, unique=True)
     # age = Column(TINYINT, nullable=False)
     can_use_fire = Column(BOOLEAN, nullable=False, default=False)
     can_use_knife = Column(BOOLEAN, nullable=False, default=False)

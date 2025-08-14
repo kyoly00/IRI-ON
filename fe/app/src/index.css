@@ -1,88 +1,65 @@
-/* =========================
-   Global Frame & Resets
-========================= */
+/* ==== 전체 화면을 가로:세로 = 7:9.19로 비율 고정 ==== */
 html, body, #root { height: 100%; margin: 0; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* 브라우저 주소창 수축에도 사이즈 안 흔들리게 */
+html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 
 body {
   display: grid;
   place-items: center;
-  background: #f5f5f7;            /* 바깥 회색 배경 */
+  background: #f5f5f7;
 }
 
-/* 앱 프레임 (#root): 7 : 9.19 비율 고정 */
+/* 앱 전체 프레임 (#root) */
 #root {
-  aspect-ratio: 7 / 9.19;
+  aspect-ratio: 7 / 9.19;                            /* ✅ 비율 */
+  /* ✅ 비율과 일치하도록 수치 통일 (7/9.19) */
   width:  min(100vw, calc(100vh * 7 / 9.19));
   height: min(100vh, calc(100vw * 9.19 / 7));
-  background: transparent;         /* 내부 페이지 배경이 보이도록 */
+
+  background: #fff;
   overflow: hidden;
   border-radius: 20px;
   box-shadow: 0 12px 28px rgba(0,0,0,.12);
 }
-@supports (height: 100svh) {
-  #root {
+
+/* 최신 브라우저에서 ‘안 흔들리는’ svh 사용 */
+@supports (height: 100svh){
+  #root{
     width:  min(100vw, calc(100svh * 7 / 9.19));
     height: min(100svh, calc(100vw * 9.19 / 7));
   }
 }
 
-/* 이미지/미디어 왜곡 방지 */
-img, svg, video, canvas {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* =========================
-   App Layout
-========================= */
-/* App.jsx에서 <div class="app-shell"><div class="app-frame">로 감싸기 */
+/* ===== 레이아웃 래퍼 ===== */
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
 }
-.app-frame {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #FBF4EC;   /* 기본 내부 배경 (페이지에서 덮어써도 됨) */
-}
 
-/* MainLayout.jsx 최상위 */
-.app-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 100%;
-}
-
-/* 실제 페이지 내용 영역 */
+/* ===== 콘텐츠(프레임 내부 스크롤만 허용) ===== */
 main, .content {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;               /* 프레임 내부만 스크롤 */
-  padding: 20px;                /* 적당한 기본 패딩 */
-  padding-bottom: 0 !important; /* sticky 네비 하단겹침 방지 */
+  overflow: auto;
+  padding-bottom: 0 !important;    /* sticky 네비 쓸 때 하단 패딩 제거 */
 }
 
-/* =========================
-   Bottom Navigation
-========================= */
+/* ---- BottomNav ---- */
+/* 프레임 ‘안’ 바닥에 고정: sticky */
 .bn {
   position: sticky;
   bottom: 0; left: 0; right: 0;
-  margin-top: auto;             /* ← 내용 없을 때도 바닥으로 밀착 */
   flex-shrink: 0;
 
-  height: 84px;
+  height: 84px;                    /* 크게: 72 → 84 */
   background: #ffffff;
   border-top: 1px solid #eee;
 
   display: flex;
-  justify-content: space-between;
+  justify-content: space-between;  /* ✅ center → space-between */
   align-items: center;
 
   z-index: 100;
@@ -90,11 +67,11 @@ main, .content {
   padding-bottom: max(env(safe-area-inset-bottom, 0), 8px);
 }
 
-/* 좌/우 그룹 */
+/* 좌/우 묶음: 가변폭 1:1 */
 .bn-side {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 18px;                       /* 16 → 18 (여유) */
   flex: 1 1 0;
 }
 .bn-left, .bn-right {
@@ -103,7 +80,6 @@ main, .content {
   justify-content: space-evenly;
 }
 
-/* 항목 */
 .bn-item {
   min-width: auto;
   height: auto;
@@ -116,24 +92,24 @@ main, .content {
 
   text-decoration: none;
   color: #9A9A9A;
-  font-size: 12px;
+  font-size: 12px;                 /* 크게: 10 → 12 */
   line-height: 1;
   position: relative;
 }
 .bn-item.bn-active { color: #222; font-weight: 600; }
+
 .bn-item img {
-  width: 28px; height: 28px;
+  width: 28px; height: 28px;       /* 크게: 22 → 28 */
   display: block;
   filter: grayscale(0);
 }
 
-/* 중앙 플로팅 FAB */
+/* 중앙 플로팅 마스코트 버튼(FAB) */
 .bn-fab {
   position: absolute;
-  bottom: 26px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 72px; height: 72px;
+  bottom: 26px;                    /* 살짝 더 띄움 */
+  left: 50%; transform: translateX(-50%);
+  width: 72px; height: 72px;       /* 크게: 64 → 72 */
   border-radius: 50%;
   background: #ffffff;
   display: grid; place-items: center;
@@ -141,13 +117,13 @@ main, .content {
   box-shadow:
     0 8px 24px rgba(0,0,0,0.12),
     0 2px 8px rgba(0,0,0,0.06),
-    0 0 0 8px #fff;  /* 보더 라인 가리는 흰 링 */
+    0 0 0 8px #fff;                /* 보더 라인 가리는 흰 링 */
   z-index: 101;
 }
-.bn-fab img { width: 48px; height: 48px; }
+.bn-fab img { width: 48px; height: 48px; } /* 42 → 48 */
 
-/* 작은 화면 대응 */
-@media (max-width: 360px) {
+/* 아주 좁은 폭에서는 라벨만 숨겨 겹침 방지(아이콘은 유지) */
+@media (max-width: 360px){
   .bn-side { gap: 12px; }
   .bn-item span { display: none; }
   .bn-item img { width: 24px; height: 24px; }
