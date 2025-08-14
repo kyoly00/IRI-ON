@@ -1,0 +1,92 @@
+/* welcome.css */
+
+/* 기본 색상 변수 */
+:root {
+  --char-nudge-x: -8px; /* 캐릭터 좌우 미세 이동값. 음수=왼쪽, 양수=오른쪽 */
+}
+
+/* 전체 페이지 */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  background-color: #fdf9f3;
+  padding: 20px;
+}
+
+/* 콘텐츠 쌓는 영역 */
+.welcome .stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 메인 히어로 영역 */
+.welcome .stack .hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 원형 아바타 컨테이너 */
+.welcome .stack .hero .avatar {
+  position: relative; /* 절대배치 기준점 */
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 8px solid #ff914d;
+  overflow: visible;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 캐릭터 이미지 - 원 중심 절대 고정 */
+.welcome .stack .hero .avatar img.char {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 78% !important;
+  height: 78% !important;
+  transform: translate(-50%, -50%) translateX(var(--char-nudge-x)) !important;
+  object-fit: contain !important;
+  display: block !important;
+  z-index: 1;
+}
+
+/* 설명 텍스트 */
+.welcome .stack .hero .subtitle {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #888;
+}
+
+/* 타이틀 */
+.welcome .stack .hero .title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+/* 버튼 스타일 */
+.welcome .start-btn {
+  margin-top: 24px;
+  background: linear-gradient(145deg, #ff914d, #ff7b2d);
+  color: #fff;
+  border: none;
+  border-radius: 40px;
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.welcome .start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
