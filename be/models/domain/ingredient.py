@@ -46,6 +46,6 @@ class Ingredient(Base):
     ingredient_id = Column(BIGINT, primary_key=True, autoincrement=True, index=True)
 
     name = Column(String(100), nullable=False)
-    unit = Column(Enum(Unit))
+    unit = Column(Enum(Unit), nullable=False)
     storage_method = Column(Enum(Storage))
     waste_type = Column(Enum(WasteType))
