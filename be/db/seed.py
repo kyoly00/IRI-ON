@@ -54,7 +54,7 @@ def seed_recipes():
                         tips=row["tips"],
                     )
                     db.add(recipe)
-                    existing_names.add(row["title"])
+                    existing_names.append(row["title"])
         db.commit()
     except Exception:
         db.rollback()
