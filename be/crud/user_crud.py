@@ -1,8 +1,10 @@
+from typing import List
 from sqlalchemy.orm import Session
 from models.user import User
 from models.user.user_ingredient import UserIngredient
 from schemas.user_profile_schema import UserProfileSchema
 from schemas.user_sign_up_schema import UserSignUpSchema
+from schemas.ingredient_id_schema import IngredientIDSchema
 
 def save_user(db: Session, user: UserSignUpSchema):
     db_user = User(
@@ -43,11 +45,11 @@ def get_user_by_id(db: Session, user_id: int):
         User.allergy,
     ).filter(User.user_id == user_id).first()
 
-def save_ingredients(db: Session, user_id: int, ingredients_ids: list):
-    for ingredient_id in ingredients_ids:
+def save_ingredients(db: Session, user_id: int, ingredients_ids: List[IngredientIDSchema]):
+    for ingredient in ingredients_ids:
         db_ingredient = UserIngredient(
             user_id=user_id,
-            ingredient_id=ingredient_id
+            ingredient_id=ingredient.ingredient_id
         )
         db.add(db_ingredient)
     db.commit()
