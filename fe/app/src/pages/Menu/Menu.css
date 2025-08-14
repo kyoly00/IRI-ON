@@ -152,3 +152,30 @@
   align-items: center;
   justify-content: center;
 }
+
+/* 보기 모드 전환 버튼 */
+.view-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.view-btn {
+  flex: 1;
+  max-width: 160px;
+  padding: 8px 0;
+  border-radius: 50px;
+  border: 2px solid #ff9844;
+  background: white;
+  color: #ff9844;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-btn.active {
+  background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
+  color: white;
+  border-color: transparent;
+}
