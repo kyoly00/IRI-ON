@@ -3,6 +3,9 @@ import csv
 from db.session import SessionLocal
 from models.recipe.recipe import Recipe, Difficulty, Category
 from models.domain.ingredient import Ingredient
+from models.recipe.recipe_ingredient import RecipeIngredient
+from crud.recipe_crud import get_recipe_id_by_name
+from crud.ingredient_crud import get_ingredient_id_by_name
 
 difficulty_map = {
     "초급": Difficulty.EASY,
@@ -86,6 +89,35 @@ def seed_ingredients():
     finally:
         db.close()
 
+def seed_recipes_ingredients():
+    db = SessionLocal()
+    try:
+        with open("data/recipes_ingredients.csv", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if db.query(RecipeIngredient).count() == 0:
+                existing_keys = []
+
+                for row in reader:
+                    if (row["title"], row["ingredients"]) in existing_keys:
+                        continue
+
+                    recipe_id = get_recipe_id_by_name(db, row["title"])[0]
+                    ingredient_id = get_ingredient_id_by_name(db, row["ingredients"])[0]
+                    recipe_ingredient = RecipeIngredient(
+                        recipe_id=recipe_id,
+                        ingredient_id=ingredient_id,
+                    )
+                    db.add(recipe_ingredient)
+                    existing_keys.append((row["title"], row["ingredients"]))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def seed():
     seed_recipes()
     seed_ingredients()
+    seed_recipes_ingredients()

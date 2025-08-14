@@ -46,7 +46,18 @@ def get_user_by_id(db: Session, user_id: int):
     ).filter(User.user_id == user_id).first()
 
 def save_ingredients(db: Session, user_id: int, ingredients_ids: List[IngredientIDSchema]):
+    # 이미 사용자가 가진 재료 ID 조회
+    existing_ids = {
+        ing.ingredient_id
+        for ing in db.query(UserIngredient.ingredient_id)
+                     .filter(UserIngredient.user_id == user_id)
+                     .all()
+    }
+
     for ingredient in ingredients_ids:
+        if ingredient.ingredient_id in existing_ids:
+            continue  # 이미 있으면 추가하지 않음
+
         db_ingredient = UserIngredient(
             user_id=user_id,
             ingredient_id=ingredient.ingredient_id
