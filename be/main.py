@@ -3,6 +3,7 @@ from db.init_db import init_db
 from db.seed import seed
 from contextlib import asynccontextmanager
 from routers import all_routers
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
