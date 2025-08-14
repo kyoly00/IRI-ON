@@ -1,5 +1,8 @@
+from typing import List
 from sqlalchemy.orm import Session
-from models.recipe import Recipe
+from models.recipe.recipe import Recipe
+from models.domain.ingredient import Ingredient
+from schemas.ingredient_id_schema import IngredientIDSchema
 
 def get_all_recipes(db: Session):
     return db.query(
@@ -7,6 +10,7 @@ def get_all_recipes(db: Session):
         Recipe.image_url,
         Recipe.name,
         Recipe.time,
+        Recipe.category
     ).all()
 
 def get_recipe_by_id(db: Session, recipe_id: int):
@@ -15,11 +19,17 @@ def get_recipe_by_id(db: Session, recipe_id: int):
         Recipe.image_url,
         Recipe.name,
         Recipe.time,
+        Recipe.category
         ).filter(Recipe.recipe_id == recipe_id).first()
 
-def get_ingredients_by_id(db: Session, recipe_id: int):
+def get_recipe_id_by_name(db: Session, name: str):
+    return db.query(Recipe.recipe_id).filter(Recipe.name == name).first()
+
+def get_recipes_by_ingredients(db: Session, ingredients: List[IngredientIDSchema]):
     return db.query(
         Recipe.recipe_id,
+        Recipe.image_url,
         Recipe.name,
-        Recipe.materials,
-        ).filter(Recipe.recipe_id == recipe_id).first()
+        Recipe.time,
+        Recipe.category
+    ).filter(Recipe.ingredients.any(Ingredient.id.in_(ingredients))).all()
