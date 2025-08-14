@@ -4,7 +4,10 @@ import Home from "./pages/Home/Home.jsx";
 import Menu from "./pages/Menu/Menu.jsx";
 import Fridge from "./pages/Fridge/Fridge.jsx";
 import Profile from "./pages/Profile/Profile.jsx";
+import FridgeComplete from "./pages/FridgeComplete/FridgeComplete.jsx";
+import CookingExplain from "./pages/CookingExplain/CookingExplain.jsx"; // ✅ CookingExplain import
 import "./index.css";
+
 
 export default function App() {
   return (
@@ -12,12 +15,16 @@ export default function App() {
       <Routes>
         {/* 하단바 있는 페이지들 */}
         <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />        {/* 루트 = Home */}
+          <Route path="/" element={<Home />} /> {/* 루트 = Home */}
           <Route path="/home" element={<Home />} />
           <Route path="/menu" element={<Menu />} />
           <Route path="/fridge" element={<Fridge />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
+
+        {/* 하단바 없는 독립 페이지 */}
+        <Route path="/fridgecomplete" element={<FridgeComplete />} />
+        <Route path="/CookingExplain/:id" element={<CookingExplain />} /> {/* ✅ 추가 */}
       </Routes>
     </BrowserRouter>
   );
