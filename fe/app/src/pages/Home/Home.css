@@ -1,0 +1,133 @@
+/* =========================
+   홈 화면 레이아웃 리셋 (모서리/그림자 제거)
+   ========================= */
+.phone, .phone-body, .phone-content {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.phone-content {
+  align-items: stretch !important;   /* 가운데 정렬 해제 */
+  justify-content: flex-start !important;
+}
+
+/* =========================
+   페이지 컨테이너
+   ========================= */
+.home-page{
+  max-width: 412px;                 /* S24 논리폭 */
+  margin: 0 auto;
+  padding: 14px 16px 28px;
+  background: #FBF4EC;              /* 크림색 배경 */
+  color:#222;
+  font-family: "Pretendard", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* =========================
+   헤더(로고 + 액션버튼)
+   ========================= */
+.home-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom: 8px;
+}
+.home-logo{
+  height: 34px !important;
+  width: auto;
+  display:block;
+}
+.home-actions{ display:flex; gap:8px; }
+.icon-btn{
+  width:34px; height:34px; border:none; border-radius:12px; background:#fff;
+  display:grid; place-items:center; cursor:pointer;
+  box-shadow: 0 8px 18px rgba(0,0,0,.06);
+  font-size:16px;
+}
+
+/* =========================
+   히어로 (왼쪽 캐릭터 / 오른쪽 말풍선)
+   ========================= */
+.hero{
+  display:grid; grid-template-columns: auto 1fr; align-items:center;
+  gap:16px; margin: 10px 0 18px; position:relative;
+}
+.hero-left{ display:grid; place-items:center; }
+.hero-chef{
+  width: 148px !important; max-width:148px !important;
+  height:auto; object-fit:contain; transform: translateY(2px);
+}
+
+/* 말풍선 + 뒤 광채 */
+.hero-bubble{
+  position:relative; padding:16px 18px; border-radius:18px;
+  background: linear-gradient(180deg,#fff 0%,#FFF7EF 100%);
+  border:1px solid #FFE2CF;
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.06),
+    inset 0 -6px 12px rgba(255,188,145,.25);
+}
+.hero-bubble::after{
+  content:""; position:absolute; left:-8px; bottom:22px; width:14px; height:14px;
+  background:inherit; transform:rotate(45deg);
+  border-left:1px solid #FFE2CF; border-bottom:1px solid #FFE2CF;
+}
+.hero-bubble::before{
+  content:""; position:absolute; inset:-18px -14px -20px -14px; z-index:-1;
+  background: radial-gradient(60% 50% at 50% 15%,
+              rgba(255,153,70,.28) 0%,
+              rgba(255,153,70,.12) 35%,
+              rgba(255,153,70,0) 70%);
+  filter: blur(8px);
+}
+
+.bubble-title{ font-size:18px; font-weight:900; color:#FF7A2F; margin:2px 0 8px; }
+.bubble-text{ margin:0; line-height:1.55; color:#303030; }
+
+/* =========================
+   섹션 공통
+   ========================= */
+.section{ margin-top: 6px; }
+.section-row{
+  display:flex; align-items:center; justify-content:space-between;
+  margin: 6px 0 10px;
+}
+.section-title{
+  display:flex; align-items:center; gap:8px; font-size:16px; font-weight:900;
+}
+.star{ font-size:18px; }
+.more-btn{
+  height:36px; padding:0 16px; border:1px solid #eee; border-radius:12px;
+  background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.06); cursor:pointer;
+}
+
+/* 카테고리 칩 */
+.cat-row{ display:flex; gap:12px; margin-bottom:10px; }
+.cat-chip{
+  border:1px solid #F2E5DB; background:#fff; color:#444; height:38px; padding:0 16px;
+  border-radius:999px; box-shadow:0 6px 14px rgba(0,0,0,.06); cursor:pointer;
+}
+.cat-chip.on{
+  color:#FF7A2F; background:#FFF2E8; border-color:#FFCDB3; font-weight:800;
+}
+
+/* 카드 리스트(옵션) */
+.card-grid{
+  display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;
+}
+.menu-card{
+  background:#fff; border:1px solid #F0E7DF; border-radius:16px; padding:10px;
+  box-shadow:0 10px 18px rgba(0,0,0,.06);
+}
+.menu-img{ width:100%; aspect-ratio: 4 / 3; object-fit:cover; border-radius:12px; margin-bottom:8px; }
+.menu-name{ font-weight:800; margin-bottom:4px; }
+.menu-meta{ font-size:12px; color:#777; }
+
+.empty{ color:#6f6f6f; margin: 8px 4px 14px; }
+
+/* 냉장고 만들기 CTA */
+.fridge-cta{
+  width:100%; height:56px; border:none; border-radius:999px;
+  background: linear-gradient(135deg,#FF9A54,#FF6B2D);
+  color:#fff; font-size:16px; font-weight:900; cursor:pointer;
+  box-shadow: 0 16px 28px rgba(255,122,47,.25);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.fridge-cta .arrow{ font-weight:900; }

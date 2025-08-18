@@ -1,16 +1,24 @@
 // src/layouts/MainLayout.jsx
-import { Outlet } from "react-router-dom";
-import BottomNav from "../components/BottomNav.jsx"; // 아이콘 네비
+import { Outlet, useLocation } from "react-router-dom";
+import BottomNav from "../components/BottomNav";   // ✅ 추가
+import "../app.css";
+
+const HIDE_ON = ["/welcome", "/welcome1", "/welcome2"]; // 온보딩 페이지들만 숨김
 
 export default function MainLayout() {
-  return (
-    <div className="app-layout">
-      <main className="content">
-        <Outlet />
-      </main>
+  const { pathname } = useLocation();
+  const showNav = !HIDE_ON.some(p => pathname.startsWith(p));
 
-      {/* 하단바 */}
-      <BottomNav />
+  return (
+    <div className="phone">
+      <div className="phone-body">
+        <main className="phone-content">
+          <Outlet />
+        </main>
+
+        {/* ✅ 하단 네비 실제 렌더링 */}
+        {showNav && <BottomNav />}
+      </div>
     </div>
   );
 }

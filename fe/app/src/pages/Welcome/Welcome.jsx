@@ -14,14 +14,14 @@ export default function Welcome() {
         </div>
       </section>
 
-      {/* 타이포 */}
+      {/* 텍스트 */}
       <section className="copy">
         <p className="eyebrow">돌봄 공백 아동을 위한</p>
         <h1 className="headline">AI 요리 선생님</h1>
       </section>
 
-      {/* CTA 버튼 */}
-      <button className="cta" onClick={() => navigate("/home")}>
+      {/* CTA 버튼 → Welcome1으로 이동 */}
+      <button className="cta" onClick={() => navigate("/welcome1")}>
         시작하기
       </button>
     </div>
