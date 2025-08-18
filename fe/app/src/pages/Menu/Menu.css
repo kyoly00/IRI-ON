@@ -1,9 +1,17 @@
 .menu-page {
   background: #faf7f0;
-  min-height: 100vh;
-  padding: 20px;
-  padding-bottom: 100px; /* 버튼 공간 확보 */
+  height: 100vh; /* 화면 높이 전체 차지 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 전체 페이지에서 스크롤 안 생기게 */
 }
+
+.menu-list {
+  flex: 1; /* 남은 공간 모두 차지 */
+  overflow-y: auto; /* 세로 스크롤 가능 */
+  padding-bottom: 100px; /* 버튼에 가리지 않도록 여백 */
+}
+
 
 .title {
   text-align: center;
@@ -18,48 +26,63 @@
   border-radius: 50px;
   padding: 8px 14px;
   margin: 15px 0;
-  box-shadow: 0px 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.05);
 }
+
 .search-bar input {
   border: none;
   outline: none;
   margin-left: 8px;
   flex: 1;
 }
+
 .search-icon {
-  color: #FF9844;
+  color: #ff9844;
 }
 
-
-
+/* 카테고리 바 */
 .category-bar {
+  position: relative;
   display: flex;
-  background: #ffffff; /* 바탕 흰색 */
+  background: #ffffff;
   border-radius: 50px;
   padding: 6px;
   margin-bottom: 20px;
-  box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* 주황색 하이라이트 */
+.category-highlight {
+  position: absolute;
+  top: 0%;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
+  box-shadow: 0px 4px 8px rgba(253, 160, 85, 0.35);
+  border-radius: 50px;
+  transition: transform 0.3s ease;
+  z-index: 0;
 }
 
 .category-btn {
+  flex: 1;
   background: transparent;
   border: none;
-  padding: 8px 16px;
+  padding: 8px 0;
   border-radius: 50px;
   font-weight: bold;
   cursor: pointer;
-  color: #000; /* 기본 글씨 검정 */
-  transition: all 0.2s ease;
+  color: #000;
+  z-index: 1;
+  position: relative;
 }
 
-/* 선택된 카테고리 스타일 */
 .category-btn.active {
-  background: linear-gradient(92.74deg, #FFB173 9.43%, #FF9844 96.54%);
   color: white;
-  box-shadow: 0px 4px 8px rgba(253, 160, 85, 0.35);
 }
 
-
+/* 메뉴 리스트 */
 .menu-list {
   display: flex;
   flex-direction: column;
@@ -76,11 +99,13 @@
   border: 2px solid transparent;
   transition: all 0.2s ease;
 }
+
 .menu-card:hover {
   transform: translateY(-2px);
 }
+
 .menu-card.selected {
-  border: 2px solid #FF9844;
+  border: 2px solid #ff9844;
   background: #fffaf4;
 }
 
@@ -108,6 +133,7 @@
   color: gray;
 }
 
+/* 하단 버튼 */
 .bottom-btn-wrapper {
   position: fixed;
   bottom: 120px;
@@ -117,24 +143,72 @@
   justify-content: center;
 }
 
- .start-btn {
+.start-btn {
   position: fixed;
   bottom: 120px;
-  width: 327px;      /* 버튼 가로 크기 */
-  height: 56px;      /* 버튼 세로 크기 */
-
-  background: linear-gradient(92.74deg, #FFB173 9.43%, #FF9844 96.54%);
+  width: 327px;
+  height: 56px;
+  background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
   box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.35);
   border-radius: 100px;
-
   border: none;
   color: white;
   font-weight: bold;
-  font-size: 18px;   /* 폰트 크기도 키움 */
+  font-size: 18px;
   cursor: pointer;
-
-  display: flex;     /* 텍스트 가운데 정렬 */
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* 보기 모드 전환 버튼 */
+.view-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 20px; /* 제목과의 간격 조절 */
+}
+
+
+.view-btn {
+  flex: 1;
+  max-width: 160px;
+  padding: 8px 0;
+  border-radius: 50px;
+  border: 2px solid #ff9844;
+  background: white;
+  color: #ff9844;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-btn.active {
+  background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
+  color: white;
+  border-color: transparent;
+}
+
+/* 스크롤바 디자인 */
+.menu-list::-webkit-scrollbar {
+  width: 6px; /* 세로 스크롤 두께 */
+}
+
+.menu-list::-webkit-scrollbar-track {
+  background: transparent; /* 트랙 투명 */
+}
+
+.menu-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ffb173, #ff9844);
+  border-radius: 10px;
+}
+
+.menu-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff9844, #ff7c2f);
+}
+
+/* Firefox 지원 */
+.menu-list {
+  scrollbar-width: thin;
+  scrollbar-color: #ff9844 transparent;
+}

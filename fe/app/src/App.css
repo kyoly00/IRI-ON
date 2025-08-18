@@ -1,0 +1,104 @@
+/* === App frame: 카드(폰) 안에서만 스크롤 === */
+html, body, #root { height: 100%; margin: 0; }
+
+.phone {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;      /* 가로만 가운데 */
+  align-items: stretch;         /* 세로는 늘려서 */
+  background: #e9eaee;          /* 바깥(웹) 배경 */
+}
+
+.phone-body {
+  width: 412px;                 /* Galaxy S24 논리 폭 */
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  overflow: hidden;             /* 내부만 스크롤 */
+}
+
+/* ✅ 여기서 스크롤 */
+.phone-content {
+  flex: 1 1 auto;
+  min-height: 0;                /* ✨ flex 자식 스크롤 핵심 */
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;          /* 터치 스크롤 보장 */
+  padding: 0;
+  display: block;               /* 가운데 정렬 방지 */
+  background:#FBF4EC;           /* 홈과 동일한 크림색 */
+  /* 본문이 바 뒤로 가리지 않게 */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom)); /* ✅ 중요 */
+}
+
+/* footer: 네비 들어올 자리 (숨기지 마) */
+.phone-footer {
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  height: auto;
+  overflow: visible;
+}
+
+/* =========================
+   하단 바: 5칸 균등 정렬
+   (JSX 변경 없이 동작)
+========================= */
+.bn{
+  position: sticky;
+  bottom: 0; left: 0; right: 0;
+  height: 84px;
+  background:#fff;
+  border-top:1px solid #eee;
+
+  /* ✅ 핵심: 5칸 균등 */
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+
+  padding: 8px 12px calc(env(safe-area-inset-bottom, 0) + 8px);
+  z-index: 100;
+}
+
+/* 좌/우 래퍼를 '투명'하게 만들어 자식 2개가 그리드 셀로 직접 배치되게 */
+.bn-left, .bn-right { display: contents; }
+
+/* 각 항목 */
+.bn-item{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  text-decoration:none;
+  color:#9A9A9A;
+  font-size:12px;
+  font-weight:600;
+  -webkit-tap-highlight-color: transparent;
+}
+.bn-item img{ width:28px; height:28px; display:block; }
+.bn-item.bn-active{ color:#222; font-weight:700; }
+
+/* 중앙 플로팅 버튼(원형) → 가운데 셀(3번째)에 고정 */
+.bn-fab{
+  grid-column: 3;                /* ✅ 가운데 칸 */
+  justify-self: center;
+  position: relative;            /* (이전 absolute 제거) */
+  transform: translateY(-12px);  /* 살짝 떠 보이게 */
+  width:72px; height:72px; border-radius:9999px;
+  background:#fff; display:grid; place-items:center;
+  border:1px solid #f2f2f2;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06), 0 0 0 8px #fff;
+  z-index:101;
+}
+.bn-fab img{ width:48px; height:48px; }
+
+/* (선택) 스크롤바 미세 */
+.phone-content::-webkit-scrollbar{ width:8px; }
+.phone-content::-webkit-scrollbar-thumb{ background:#e6e6e6; border-radius:8px; }
