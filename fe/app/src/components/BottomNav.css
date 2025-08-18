@@ -1,0 +1,58 @@
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 70px;
+  background: #fff;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+}
+
+/* 각 네비 아이템 */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px;
+  text-decoration: none;
+  color: #333;
+}
+
+.nav-item .icon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+.nav-item.active {
+  font-weight: bold;
+  color: #000;
+}
+
+/* 중앙 로고 (FAB 느낌) */
+.nav-fab {
+  position: absolute;
+  top: -30px; /* 위로 띄우기 */
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.nav-fab img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}

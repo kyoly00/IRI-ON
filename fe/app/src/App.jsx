@@ -7,6 +7,7 @@ import Home from "./pages/Home/Home.jsx";
 import Menu from "./pages/Menu/Menu.jsx";
 import Fridge from "./pages/Fridge/Fridge.jsx";
 import ProfileModify from "./pages/Profile/Profile_modify.jsx";
+import Community from "./pages/Community/Community.jsx";
 
 // 온보딩
 import Welcome from "./pages/Welcome/Welcome.jsx";
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/menu" element={<Menu />} />
               <Route path="/fridge" element={<Fridge />} />
               <Route path="/profile" element={<ProfileModify />} />
+              <Route path="/community" element={<Community />} />   
             </Route>
 
             {/* 잘못된 경로 처리 */}
