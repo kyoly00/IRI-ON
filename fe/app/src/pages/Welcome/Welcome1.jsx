@@ -10,16 +10,24 @@ export default function Welcome1() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;                    // 중복 제출 방지
+    if (submitting) return; // 중복 제출 방지
     if (!id || !password) {
       alert("이메일과 비밀번호를 입력해주세요.");
       return;
     }
 
-    const url = "http://localhost:8000/users/signUp";
-    const payload = { id, password };
+    // ✅ 반드시 백엔드 실행 주소와 맞추기 (127.0.0.1)
+    const url = "http://127.0.0.1:8000/users/profile";
 
-    console.groupCollapsed("🔶 POST /users/signUp");
+    // ✅ 백엔드 스키마에 맞춰 payload 구성 (임시 예시)
+    const payload = {
+      name: id,              // 이메일 → name 필드에 넣음
+      can_use_fire: false,   // 기본값
+      can_use_knife: false,  // 기본값
+      allergy: ""            // 기본값
+    };
+
+    console.groupCollapsed("🔶 POST /users/profile");
     console.log("→ URL:", url);
     console.log("→ Payload:", payload);
 
@@ -33,7 +41,11 @@ export default function Welcome1() {
 
       const raw = await res.text();
       let data = null;
-      try { data = raw ? JSON.parse(raw) : null; } catch { data = raw; }
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = raw;
+      }
 
       console.log("← Status:", res.status, res.statusText);
       console.log("← Raw:", raw);
@@ -41,7 +53,6 @@ export default function Welcome1() {
       if (!res.ok) {
         console.error("❌ 요청 실패:", data);
         alert(`로그인/가입 실패 (HTTP ${res.status})`);
-        // return;  // ❌ 막지 말고 finally에서 이동
       } else {
         console.log("✅ 요청 성공:", data);
         alert("로그인/가입 성공!");
@@ -52,7 +63,7 @@ export default function Welcome1() {
     } finally {
       console.groupEnd();
       setSubmitting(false);
-      navigate("/welcome2");                   // ✅ 성공/실패 상관없이 이동
+      navigate("/welcome2"); // 성공/실패 상관없이 이동
     }
   };
 

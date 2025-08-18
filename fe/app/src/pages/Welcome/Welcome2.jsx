@@ -102,6 +102,7 @@ export default function Welcome2() {
     };
 
     try {
+
       const res = await fetch("http://localhost:8000/users/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -112,7 +113,7 @@ export default function Welcome2() {
         alert(`프로필 생성 실패 (HTTP ${res.status})`);
       } else {
         let raw = await res.text();
-        try { JSON.parse(raw); } catch (_) {}
+        try { JSON.parse(raw); } catch (_) { }
         alert("프로필 생성 완료!");
       }
     } catch (e) {
@@ -355,7 +356,7 @@ function LevelCard({ lvl, active, onSelect, img, title, desc }) {
     <button
       type="button"
       onClick={onSelect}
-      className={`level-card ${active ? "active" : ""}`}
+      className={`level-card ${active ? "active" : ""}`} 
       aria-pressed={active}
     >
       <div className="lv-badge">Lv. {lvl}</div>
