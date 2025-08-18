@@ -1,24 +1,18 @@
-// src/layouts/MainLayout.jsx
 import { Outlet, useLocation } from "react-router-dom";
-import BottomNav from "../components/BottomNav";   // ✅ 추가
-import "../app.css";
+import BottomNav from "../components/BottomNav";
 
-const HIDE_ON = ["/welcome", "/welcome1", "/welcome2"]; // 온보딩 페이지들만 숨김
+const HIDE_ON = ["/", "/welcome1", "/welcome2"]; // 온보딩 페이지 경로
 
 export default function MainLayout() {
   const { pathname } = useLocation();
-  const showNav = !HIDE_ON.some(p => pathname.startsWith(p));
+  const showNav = !HIDE_ON.includes(pathname); // 온보딩이면 false
 
   return (
-    <div className="phone">
-      <div className="phone-body">
-        <main className="phone-content">
-          <Outlet />
-        </main>
-
-        {/* ✅ 하단 네비 실제 렌더링 */}
-        {showNav && <BottomNav />}
-      </div>
+    <div className="app-shell">
+      <main className="content">
+        <Outlet />
+      </main>
+      {showNav && <BottomNav />} {/* 온보딩 페이지가 아닐 때만 하단바 출력 */}
     </div>
   );
 }

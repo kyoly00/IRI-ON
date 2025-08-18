@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from routers import all_routers
 from fastapi.middleware.cors import CORSMiddleware
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 앱 시작 시 실행
