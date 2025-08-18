@@ -3,9 +3,11 @@ import csv
 from db.session import SessionLocal
 from models.recipe.recipe import Recipe, Difficulty, Category
 from models.domain.ingredient import Ingredient
+from models.domain.tool import Tool
 from models.recipe.recipe_ingredient import RecipeIngredient
+from models.recipe.recipe_tool import RecipeTool
 from crud.recipe_crud import get_recipe_id_by_name
-from crud.ingredient_crud import get_ingredient_id_by_name
+from crud.domain_crud import get_ingredient_id_by_name, get_tool_id_by_name
 
 difficulty_map = {
     "초급": Difficulty.EASY,
@@ -116,8 +118,60 @@ def seed_recipes_ingredients():
     finally:
         db.close()
 
+def seed_tools():
+    db = SessionLocal()
+    try:
+        with open("data/recipes_tools.csv", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if db.query(Tool).count() == 0:
+                existing_names = []
+
+                for row in reader:
+                    if row["tools"] in existing_names:
+                        continue
+
+                    tool = Tool(
+                        name=row["tools"],
+                    )
+                    db.add(tool)
+                    existing_names.append(row["tools"])
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+def seed_recipes_tools():
+    db = SessionLocal()
+    try:
+        with open("data/recipes_tools.csv", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if db.query(RecipeTool).count() == 0:
+                existing_keys = []
+
+                for row in reader:
+                    if (row["title"], row["tools"]) in existing_keys:
+                        continue
+
+                    recipe_id = get_recipe_id_by_name(db, row["title"])[0]
+                    tool_id = get_tool_id_by_name(db, row["tools"])[0]
+                    recipe_tool = RecipeTool(
+                        recipe_id=recipe_id,
+                        tool_id=tool_id,
+                    )
+                    db.add(recipe_tool)
+                    existing_keys.append((row["title"], row["tools"]))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 def seed():
     seed_recipes()
     seed_ingredients()
     seed_recipes_ingredients()
+    seed_tools()
+    seed_recipes_tools()

@@ -7,6 +7,7 @@ from schemas.user_profile_schema import UserProfileSchema
 from schemas.user_id_schema import UserIDSchema
 from schemas.user_sign_up_schema import UserSignUpSchema
 from schemas.ingredient_id_schema import IngredientIDSchema
+from schemas.tool_id_schema import ToolIDSchema
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -26,4 +27,10 @@ def create_user_profile(user_id: int, user_profile: UserProfileSchema, db: Sessi
 @router.post("/ingredients", response_model=UserIDSchema)
 def save_user_ingredients(user_id: int, ingredients_ids: List[IngredientIDSchema], db: Session = Depends(get_db)):
     user_crud.save_ingredients(db, user_id, ingredients_ids)
+    return UserIDSchema(user_id=user_id)
+
+# 사용자가 가지고 있는 도구 저장
+@router.post("/tools", response_model=UserIDSchema)
+def save_user_tools(user_id: int, tools_ids: List[ToolIDSchema], db: Session = Depends(get_db)):
+    user_crud.save_tools(db, user_id, tools_ids)
     return UserIDSchema(user_id=user_id)

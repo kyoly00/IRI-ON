@@ -1,5 +1,5 @@
 from typing import List
-from requests import Session
+from sqlalchemy.orm import Session
 from crud.recipe_crud import get_recipes_by_ingredients
 from crud.user_crud import get_user_ingredients
 from schemas.recipe_schema import RecipeSchema
