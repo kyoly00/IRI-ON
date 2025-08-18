@@ -1,5 +1,31 @@
+from typing import List
 from sqlalchemy.orm import Session
 from models.user import User
+from models.user.user_ingredient import UserIngredient
+from schemas.user_profile_schema import UserProfileSchema
+from schemas.user_sign_up_schema import UserSignUpSchema
+from schemas.ingredient_id_schema import IngredientIDSchema
+
+def save_user(db: Session, user: UserSignUpSchema):
+    db_user = User(
+        id=user.id,
+        password=user.password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def save_profile(db: Session, user_id: int, user_profile: UserProfileSchema):
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if db_user:
+        db_user.name = user_profile.name
+        db_user.can_use_fire = user_profile.can_use_fire
+        db_user.can_use_knife = user_profile.can_use_knife
+        db_user.allergy = user_profile.allergy
+        db.commit()
+        db.refresh(db_user)
+    return db_user
 
 def get_all_users(db: Session):
     return db.query(
@@ -18,3 +44,26 @@ def get_user_by_id(db: Session, user_id: int):
         User.can_use_knife,
         User.allergy,
     ).filter(User.user_id == user_id).first()
+
+def save_ingredients(db: Session, user_id: int, ingredients_ids: List[IngredientIDSchema]):
+    # 이미 사용자가 가진 재료 ID 조회
+    existing_ids = {
+        ing.ingredient_id
+        for ing in db.query(UserIngredient.ingredient_id)
+                     .filter(UserIngredient.user_id == user_id)
+                     .all()
+    }
+
+    for ingredient in ingredients_ids:
+        if ingredient.ingredient_id in existing_ids:
+            continue  # 이미 있으면 추가하지 않음
+
+        db_ingredient = UserIngredient(
+            user_id=user_id,
+            ingredient_id=ingredient.ingredient_id
+        )
+        db.add(db_ingredient)
+    db.commit()
+
+def get_user_ingredients(db: Session, user_id: int) -> List[IngredientIDSchema]:
+    return db.query(UserIngredient.ingredient_id).filter(UserIngredient.user_id == user_id).all()

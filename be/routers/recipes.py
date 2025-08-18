@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from db.session import get_db
-from crud import recipe_crud, user_crud
+from services.recommend_recipe import recommend_recipes
+from crud import recipe_crud
 from schemas.recipe_schema import RecipeSchema
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -19,3 +20,9 @@ def get_all_recipes(db: Session = Depends(get_db)):
 def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     recipe = recipe_crud.get_recipe_by_id(db, recipe_id)
     return recipe
+
+# 추천 레시피 조회
+@router.get("/recommendations/{user_id}", response_model=List[RecipeSchema])
+def get_recommended_recipes(user_id: int, db: Session = Depends(get_db)):
+    recommended_recipes = recommend_recipes(user_id, db)
+    return recommended_recipes
