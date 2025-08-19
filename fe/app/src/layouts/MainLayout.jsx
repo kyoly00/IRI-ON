@@ -4,11 +4,11 @@ import BottomNav from "../components/BottomNav";
 
 export default function MainLayout() {
   return (
-    <div className="app-shell">
-      <main className="content">{/* 하단바에 안 가리게 */}
+    <>
+      <main className="content">
         <Outlet />
       </main>
       <BottomNav />
-    </div>
+    </>
   );
 }

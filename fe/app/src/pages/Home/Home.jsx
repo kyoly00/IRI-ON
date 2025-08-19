@@ -1,7 +1,8 @@
+// src/pages/Home/Home.jsx
 export default function Home() {
   return (
-    <div>
-      <h1>홈 화면</h1>
+    <div className="home">
+      <h1>여기는 홈입니다</h1>
     </div>
   );
 }

@@ -1,9 +1,17 @@
 .menu-page {
   background: #faf7f0;
-  min-height: 100vh;
-  padding: 20px;
-  padding-bottom: 100px; /* 버튼 공간 확보 */
+  height: 100vh; /* 화면 높이 전체 차지 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 전체 페이지에서 스크롤 안 생기게 */
 }
+
+.menu-list {
+  flex: 1; /* 남은 공간 모두 차지 */
+  overflow-y: auto; /* 세로 스크롤 가능 */
+  padding-bottom: 100px; /* 버튼에 가리지 않도록 여백 */
+}
+
 
 .title {
   text-align: center;
@@ -158,8 +166,9 @@
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 15px;
+  margin: 10px 0 20px; /* 제목과의 간격 조절 */
 }
+
 
 .view-btn {
   flex: 1;
@@ -178,4 +187,28 @@
   background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
   color: white;
   border-color: transparent;
+}
+
+/* 스크롤바 디자인 */
+.menu-list::-webkit-scrollbar {
+  width: 6px; /* 세로 스크롤 두께 */
+}
+
+.menu-list::-webkit-scrollbar-track {
+  background: transparent; /* 트랙 투명 */
+}
+
+.menu-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ffb173, #ff9844);
+  border-radius: 10px;
+}
+
+.menu-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff9844, #ff7c2f);
+}
+
+/* Firefox 지원 */
+.menu-list {
+  scrollbar-width: thin;
+  scrollbar-color: #ff9844 transparent;
 }

@@ -1,43 +1,40 @@
-import { NavLink, Link } from "react-router-dom";
-import homeIcon from "../assets/home.png";
-import menuIcon from "../assets/menu.png";
-import fridgeIcon from "../assets/fridge.png";
-import profileIcon from "../assets/profile.png";
-import logoIcon from "../assets/logo.png"; // 가운데 마스코트
+// src/components/BottomNav.jsx
+import { Link, useLocation } from "react-router-dom";
+import "./BottomNav.css";
+import homeIcon from "../assets/bottom_bar/home.png";
+import fridgeIcon from "../assets/bottom_bar/fridge.png";
+import menuIcon from "../assets/bottom_bar/menu.png";
+import profileIcon from "../assets/bottom_bar/profile.png";
+import logoIcon from "../assets/bottom_bar/logo.png";
 
 export default function BottomNav() {
-  const linkCls = ({ isActive }) => "bn-item" + (isActive ? " bn-active" : "");
+  const { pathname } = useLocation();
 
   return (
-    <nav className="bn" role="navigation" aria-label="Bottom navigation">
-      {/* 좌측 2개 */}
-      <div className="bn-side bn-left">
-        <NavLink to="/home" className={linkCls} aria-label="홈">
-          <img src={homeIcon} alt="" />
-          <span>홈</span>
-        </NavLink>
-        <NavLink to="/menu" className={linkCls} aria-label="메뉴">
-          <img src={menuIcon} alt="" />
-          <span>메뉴</span>
-        </NavLink>
-      </div>
+    <nav className="bottom-nav">
+      <Link to="/home" className={`nav-item ${pathname === "/home" ? "active" : ""}`}>
+        <img src={homeIcon} alt="홈" className="icon" />
+        <span>홈</span>
+      </Link>
 
-      {/* 중앙 플로팅 버튼 */}
-      <div className="bn-fab" aria-label="중앙">
-        <img src={logoIcon} alt="" />
-      </div>
+      <Link to="/fridge" className={`nav-item ${pathname === "/fridge" ? "active" : ""}`}>
+        <img src={fridgeIcon} alt="냉장고" className="icon" />
+        <span>냉장고</span>
+      </Link>
 
-      {/* 우측 2개 */}
-      <div className="bn-side bn-right">
-        <NavLink to="/fridge" className={linkCls} aria-label="냉장고">
-          <img src={fridgeIcon} alt="" />
-          <span>냉장고</span>
-        </NavLink>
-        <NavLink to="/profile" className={linkCls} aria-label="프로필">
-          <img src={profileIcon} alt="" />
-          <span>프로필</span>
-        </NavLink>
-      </div>
+      <Link to="/community" className="nav-fab">
+        <img src={logoIcon} alt="logo" />
+      </Link>
+
+      <Link to="/menu" className={`nav-item ${pathname === "/menu" ? "active" : ""}`}>
+        <img src={menuIcon} alt="메뉴" className="icon" />
+        <span>메뉴</span>
+      </Link>
+
+      <Link to="/profile" className={`nav-item ${pathname === "/profile" ? "active" : ""}`}>
+        <img src={profileIcon} alt="프로필" className="icon" />
+        <span>프로필</span>
+      </Link>
     </nav>
   );
 }
