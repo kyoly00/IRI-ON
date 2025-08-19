@@ -1,3 +1,4 @@
+
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
@@ -6,6 +7,11 @@ import Menu from "./pages/Menu/Menu.jsx";
 import Fridge from "./pages/Fridge/Fridge.jsx";
 import FridgeComplete from "./pages/FridgeComplete/FridgeComplete.jsx";
 import CookingExplain from "./pages/CookingExplain/CookingExplain.jsx";
+import Welcome from "./pages/Welcome/Welcome.jsx";
+import Welcome1 from "./pages/Welcome/Welcome1.jsx";
+import Welcome2 from "./pages/Welcome/Welcome2.jsx";
+import Community from "./pages/Community/Community.jsx";
+import ProfileModify from "./pages/Profile/Profile_modify.jsx";
 
 import "./index.css";
 
@@ -17,7 +23,7 @@ export default function App() {
           <Routes>
             {/* 온보딩 화면 (하단바 없음) */}
             <Route path="/" element={<Welcome />} />
-            <Route path="/welcome1" element={<Welcome1 />} />   {/* ✅ 추가 */}
+            <Route path="/welcome1" element={<Welcome1 />} />
             <Route path="/welcome2" element={<Welcome2 />} />
 
             {/* 하단바 있는 페이지 */}
@@ -25,7 +31,8 @@ export default function App() {
               <Route path="/home" element={<Home />} />
               <Route path="/menu" element={<Menu />} />
               <Route path="/fridge" element={<Fridge />} />
-            
+              <Route path="/community" element={<Community />} />   {/* ✅ 추가 */}
+              <Route path="/profile" element={<ProfileModify />} /> {/* ✅ 추가 */}
             </Route>
 
             {/* 하단바 없는 독립 페이지 */}

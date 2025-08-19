@@ -1,0 +1,29 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;      /* 부모 기준으로 꽉 채우기 */
+  width: 100%;
+  max-width: 500px;
+  background: #fff;
+}
+
+.content {
+  flex: 1;
+  background: lightblue;   /* 테스트 색상 */
+}
+
+.bottom-nav {
+  height: 70px;
+  background: pink;        /* 테스트 색상 */
+}

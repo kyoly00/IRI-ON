@@ -31,64 +31,51 @@ export default function Fridge() {
         : [...prev, item.ingredient_id]
     );
   };
-
   // 선택된 재료 서버에 저장 후 이동
-  const goToComplete = async () => {
-    // 1. fridge 저장용 payload
-    const selectedData = ingredients
-      .filter((item) => selected.includes(item.ingredient_id))
-      .map((item) => ({
-        ingredient_id: item.ingredient_id,
-        name: item.name,
-      }));
+const goToComplete = async () => {
+  try {
+    // 선택된 재료 하나씩 서버로 전송
+    for (let id of selected) {
+      const payload = { ingredient_id: id }; // ✅ 스펙에 맞게 구성
+      const url = "http://localhost:8000/users/ingredients";
+      console.log("→ POST", url, payload);
 
-    // 2. users/ingredients 저장용 payload
-    const userIngredientData = selected.map((id) => ({
-      user_id: 1, // 🔹 로그인 사용자 ID로 교체 필요
-      ingredient_id: id,
-    }));
-
-    try {
-      // 📌 첫 번째 API: fridge 저장
-      const fridgeUrl = "http://localhost:8000/api/fridge";
-      console.log("→ POST", fridgeUrl, selectedData);
-      const res1 = await fetch(fridgeUrl, {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(selectedData),
+        body: JSON.stringify(payload),
       });
 
-      if (!res1.ok) {
-        const raw = await res1.text();
-        console.error("❌ fridge 저장 실패:", res1.status, res1.statusText, raw);
-        alert(`저장 실패 (HTTP ${res1.status})`);
-        return;
+      const raw = await res.text();
+      if (!res.ok) {
+        console.error(`❌ 재료 ${id} 저장 실패:`, res.status, res.statusText, raw);
+        alert(`재료 저장 실패 (ingredient_id: ${id}, HTTP ${res.status})`);
+        return; // 하나라도 실패하면 중단
       }
 
-      // 📌 두 번째 API: users/ingredients 저장
-      const userIngredientsUrl = "http://localhost:8000/users/ingredients";
-      console.log("→ POST", userIngredientsUrl, userIngredientData);
-      const res2 = await fetch(userIngredientsUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userIngredientData),
-      });
-
-      if (!res2.ok) {
-        const raw = await res2.text();
-        console.error("❌ users/ingredients 저장 실패:", res2.status, res2.statusText, raw);
-        alert(`저장 실패 (HTTP ${res2.status})`);
-        return;
+      let data = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = raw;
       }
 
-      console.log("✅ 모든 저장 성공");
-      alert("재료 저장 완료!");
-      navigate("/fridgecomplete");
-    } catch (error) {
-      console.error("❌ 네트워크/코르스 에러:", error);
-      alert("저장 실패 (네트워크/CORS)");
+      console.log(`✅ 재료 ${id} 저장 성공, 서버 응답:`, data);
+      alert(`재료 ${id} 저장 성공 (user_id: ${data.user_id})`);
     }
-  };
+
+    // 모든 저장 완료 시 페이지 이동
+    alert("모든 재료 저장 완료!");
+    navigate("/fridgecomplete");
+
+  } catch (error) {
+    console.error("❌ 네트워크/코르스 에러:", error);
+    alert("저장 실패 (네트워크/CORS)");
+  }
+};
+
+
+
 
   return (
     <div className="fridge-page">
@@ -108,24 +95,22 @@ export default function Fridge() {
       </div>
 
       {/* 재료 목록 */}
-      <div className="ingredient-grid">
-        {ingredients.length > 0 ? (
-          ingredients.map((item) => (
-            <div
-              key={item.ingredient_id}
-              className={`ingredient-card ${
-                selected.includes(item.ingredient_id) ? "selected" : ""
-              }`}
-              onClick={() => handleSelect(item)}
-            >
-              <img src={item.img} alt={item.name} />
-              <span>{item.name}</span>
-            </div>
-          ))
-        ) : (
-          <p>재료를 불러오는 중...</p>
-        )}
+<div className="ingredient-grid">
+  {ingredients.length > 0 ? (
+    ingredients.map((item) => (
+      <div
+        key={item.ingredient_id}
+        className={`ingredient-card ${selected.includes(item.ingredient_id) ? "selected" : ""}`}
+        onClick={() => handleSelect(item)}
+      >
+        <span>{item.name}</span> {/* ✅ 이름만 표시 */}
       </div>
+    ))
+  ) : (
+    <p>재료를 불러오는 중...</p>
+  )}
+</div>
+
 
       {/* 하단 버튼 */}
       <button className="bottom-btn" onClick={goToComplete}>

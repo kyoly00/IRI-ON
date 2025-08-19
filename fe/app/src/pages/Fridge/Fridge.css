@@ -117,7 +117,7 @@
 }
 
 /* 하단 네비게이션 */
-.bottom-nav {
+.Fridege-bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
@@ -238,4 +238,51 @@
   border: none;
   font-size: 18px;
   cursor: pointer;
+}
+
+/* 재료 그리드 - 스크롤 추가 */
+.ingredient-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  max-height: 400px; /* 스크롤 영역 높이 */
+  overflow-y: auto;
+  padding-right: 8px; /* 스크롤바 공간 확보 */
+}
+
+/* 예쁜 스크롤바 스타일 */
+.ingredient-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ingredient-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ffb173, #ff9844);
+  border-radius: 4px;
+}
+
+.ingredient-grid::-webkit-scrollbar-track {
+  background: #f5e9dc;
+  border-radius: 4px;
+}
+
+/* 재료 카드 */
+.ingredient-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid #fff;
+}
+
+.ingredient-card.selected {
+  border: 2px solid #fda055;
+  box-shadow: 0px 4px 12px rgba(253, 160, 85, 0.25);
+}
+
+.ingredient-card span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #121213;
 }
