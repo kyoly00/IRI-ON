@@ -27,7 +27,7 @@ async def cook_assistant_ws(
 
     # DB 조회
     profile = user_crud.get_user_by_id(db, user_id)
-    recipe = recipe_crud.get_ingredients_by_id(db, recipe_id)
+    recipe = recipe_crud.get_recipe_by_id(db, recipe_id)
     if not profile or not recipe:
         await websocket.send_json({"type": "error", "message": "invalid user_id or recipe_id"})
         await websocket.close()
