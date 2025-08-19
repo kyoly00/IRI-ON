@@ -14,7 +14,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 # 회원가입 - 유저 생성
 @router.post("/signUp", response_model=UserIDSchema)
 def create_user(user: UserSignUpSchema, db: Session = Depends(get_db)):
-    new_user = user_crud.save_user(db, user)
+    new_user = user_crud.add_user(db, user)
     return UserIDSchema(user_id=new_user.user_id)
 
 # 프로필 생성

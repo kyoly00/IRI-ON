@@ -8,7 +8,7 @@ from schemas.user_sign_up_schema import UserSignUpSchema
 from schemas.ingredient_id_schema import IngredientIDSchema
 from schemas.tool_id_schema import ToolIDSchema
 
-def save_user(db: Session, user: UserSignUpSchema):
+def add_user(db: Session, user: UserSignUpSchema):
     db_user = User(
         id=user.id,
         password=user.password
@@ -24,26 +24,20 @@ def save_profile(db: Session, user_id: int, user_profile: UserProfileSchema):
         db_user.name = user_profile.name
         db_user.can_use_fire = user_profile.can_use_fire
         db_user.can_use_knife = user_profile.can_use_knife
+        db_user.can_use_peeler = user_profile.can_use_peeler
+        db_user.can_use_scissors = user_profile.can_use_scissors
         db_user.allergy = user_profile.allergy
         db.commit()
         db.refresh(db_user)
     return db_user
 
-def get_all_users(db: Session):
+def get_user_by_id(db: Session, user_id: int) -> UserProfileSchema:
     return db.query(
-        User.user_id,
         User.name,
         User.can_use_fire,
         User.can_use_knife,
-        User.allergy,
-    ).all()
-
-def get_user_by_id(db: Session, user_id: int):
-    return db.query(
-        User.user_id,
-        User.name,
-        User.can_use_fire,
-        User.can_use_knife,
+        User.can_use_peeler,
+        User.can_use_scissors,
         User.allergy,
     ).filter(User.user_id == user_id).first()
 
@@ -67,7 +61,7 @@ def save_ingredients(db: Session, user_id: int, ingredients_ids: List[Ingredient
         db.add(db_ingredient)
     db.commit()
 
-def get_user_ingredients(db: Session, user_id: int) -> List[IngredientIDSchema]:
+def get_user_ingredients_ids(db: Session, user_id: int) -> List[IngredientIDSchema]:
     return db.query(UserIngredient.ingredient_id).filter(UserIngredient.user_id == user_id).all()
 
 def save_tools(db: Session, user_id: int, tools_ids: List[ToolIDSchema]):
@@ -90,5 +84,5 @@ def save_tools(db: Session, user_id: int, tools_ids: List[ToolIDSchema]):
         db.add(db_tool)
     db.commit()
 
-def get_user_tools(db: Session, user_id: int) -> List[ToolIDSchema]:
+def get_user_tools_ids(db: Session, user_id: int) -> List[ToolIDSchema]:
     return db.query(UserTool.tool_id).filter(UserTool.user_id == user_id).all()

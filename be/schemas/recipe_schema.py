@@ -6,6 +6,7 @@ class RecipeSchema(BaseModel):
     image_url: str
     time: int
     category: str
+    difficulty: str | None
 
     class Config:
         orm_mode = True  # ORM 객체도 자동 변환 가능
