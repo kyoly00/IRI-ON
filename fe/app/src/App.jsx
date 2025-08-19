@@ -1,18 +1,16 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
-
-// 페이지들
 import Home from "./pages/Home/Home.jsx";
 import Menu from "./pages/Menu/Menu.jsx";
 import Fridge from "./pages/Fridge/Fridge.jsx";
-import ProfileModify from "./pages/Profile/Profile_modify.jsx";
-import Community from "./pages/Community/Community.jsx";
-
-// 온보딩
+import FridgeComplete from "./pages/FridgeComplete/FridgeComplete.jsx";
+import CookingExplain from "./pages/CookingExplain/CookingExplain.jsx";
 import Welcome from "./pages/Welcome/Welcome.jsx";
 import Welcome1 from "./pages/Welcome/Welcome1.jsx";
 import Welcome2 from "./pages/Welcome/Welcome2.jsx";
+import Community from "./pages/Community/Community.jsx";
+import ProfileModify from "./pages/Profile/Profile_modify.jsx";
 
 import "./index.css";
 
@@ -22,19 +20,23 @@ export default function App() {
       <div className="app-shell">
         <div className="app-frame">
           <Routes>
-            {/* 온보딩 (하단바 없음) */}
+            {/* 온보딩 화면 (하단바 없음) */}
             <Route path="/" element={<Welcome />} />
             <Route path="/welcome1" element={<Welcome1 />} />
             <Route path="/welcome2" element={<Welcome2 />} />
 
-            {/* 메인 (하단바 있음 → MainLayout) */}
+            {/* 하단바 있는 페이지 */}
             <Route element={<MainLayout />}>
               <Route path="/home" element={<Home />} />
               <Route path="/menu" element={<Menu />} />
               <Route path="/fridge" element={<Fridge />} />
-              <Route path="/profile" element={<ProfileModify />} />
-              <Route path="/community" element={<Community />} />   
+              <Route path="/community" element={<Community />} />   {/* ✅ 추가 */}
+              <Route path="/profile" element={<ProfileModify />} /> {/* ✅ 추가 */}
             </Route>
+
+            {/* 하단바 없는 독립 페이지 */}
+            <Route path="/fridgecomplete" element={<FridgeComplete />} />
+            <Route path="/CookingExplain/:id" element={<CookingExplain />} />
 
             {/* 잘못된 경로 처리 */}
             <Route path="*" element={<Navigate to="/" replace />} />
