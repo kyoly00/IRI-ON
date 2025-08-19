@@ -2,9 +2,11 @@ from typing import List
 from sqlalchemy.orm import Session
 from models.user import User
 from models.user.user_ingredient import UserIngredient
+from models.user.user_tool import UserTool
 from schemas.user_profile_schema import UserProfileSchema
 from schemas.user_sign_up_schema import UserSignUpSchema
 from schemas.ingredient_id_schema import IngredientIDSchema
+from schemas.tool_id_schema import ToolIDSchema
 
 def save_user(db: Session, user: UserSignUpSchema):
     db_user = User(
@@ -67,3 +69,26 @@ def save_ingredients(db: Session, user_id: int, ingredients_ids: List[Ingredient
 
 def get_user_ingredients(db: Session, user_id: int) -> List[IngredientIDSchema]:
     return db.query(UserIngredient.ingredient_id).filter(UserIngredient.user_id == user_id).all()
+
+def save_tools(db: Session, user_id: int, tools_ids: List[ToolIDSchema]):
+    # 이미 사용자가 가진 도구 ID 조회
+    existing_ids = {
+        tool.tool_id
+        for tool in db.query(UserTool.tool_id)
+                     .filter(UserTool.user_id == user_id)
+                     .all()
+    }
+
+    for tool in tools_ids:
+        if tool.tool_id in existing_ids:
+            continue  # 이미 있으면 추가하지 않음
+
+        db_tool = UserTool(
+            user_id=user_id,
+            tool_id=tool.tool_id
+        )
+        db.add(db_tool)
+    db.commit()
+
+def get_user_tools(db: Session, user_id: int) -> List[ToolIDSchema]:
+    return db.query(UserTool.tool_id).filter(UserTool.user_id == user_id).all()
