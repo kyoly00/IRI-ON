@@ -1,5 +1,10 @@
-/* ✅ Welcome 전용 화면 */
+/* =======================
+   Welcome.css (전체 교체)
+   ======================= */
+
+/* 루트 */
 .welcome-page {
+  position: relative;
   width: 100%;
   height: 100vh;
   margin: 0;
@@ -9,42 +14,72 @@
   justify-content: center;
   align-items: center;
 
-  background: none !important;        /* 기본 배경 제거 */
+  /* 카드/앱 프레임 배경 비활성화 */
+  background: none !important;
   background-color: transparent !important;
+
+  overflow: hidden;       /* 배경 이미지 넘침 방지 */
 }
 
-.onboarding-img {
+/* 배경 이미지 (뒤에 깔림) */
+.welcome-page .onboarding-img {
+  position: absolute;
+  inset: 0;               /* top/right/bottom/left: 0 */
   width: 100%;
   height: 100%;
-  object-fit: cover;   /* 이미지 꽉 채우기 */
+  display: block;
+  object-fit: cover;      /* 꽉 채우기(잘릴 수 있음) */
+  object-position: center 30%;  /* 보이는 위치 미세조정 */
+  transform: none;        /* 확대 제거 */
+  z-index: 0;             /* 부모 안에서 맨 뒤 */
+  pointer-events: none;   /* 클릭 막지 않기 */
 }
 
-/* ✅ app-frame에서 welcome 모드일 때 배경 제거 */
+/* 배경 위에 모든 컨텐츠를 올림 */
+.welcome-page > :not(.onboarding-img) {
+  position: relative;
+  z-index: 1;
+}
+
+/* 앱 프레임이 웰컴 모드일 때 카드 배경/그림자 제거 */
 .app-frame.welcome-mode {
   background: none !important;
   background-color: transparent !important;
-  box-shadow: none !important;  /* 카드 그림자도 제거 */
+  box-shadow: none !important;
 }
 
-/* ✅ content가 있으면 거기도 제거 */
+/* content 래퍼도 제거 (프로젝트 구조에 따라 사용) */
 .content.welcome-mode {
   background: none !important;
   background-color: transparent !important;
 }
 
-.start-btn {
-  margin-top: 20px;
-  padding: 12px 24px;
-  background-color: #ff914d;
-  color: white;
+/* 시작 버튼 (충돌 방지: 클래스명 분리) */
+.welcome-page .welcome-start-btn {
+  position: fixed;  /* 화면 하단 중앙 고정 */
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+
+  width: 260px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #ff914d;
+  color: #fff;
   font-size: 16px;
+  font-weight: 700;
   border: none;
-  border-radius: 8px;
+  border-radius: 28px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  box-shadow: 0 8px 16px rgba(253,160,85,.35);
+  transition: background .2s ease;
+
+  z-index: 2;  /* 컨텐츠보다 위 */
 }
 
-.start-btn:hover {
-  background-color: #ff7a26;
+.welcome-page .welcome-start-btn:hover {
+  background: #ff7a26;
 }
-

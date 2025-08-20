@@ -13,7 +13,7 @@ export default function Welcome() {
   return (
     <div className="welcome-page">
       <img src="/Onboarding.png" alt="온보딩" className="onboarding-img" />
-      <button className="start-btn" onClick={handleStart}>
+      <button className="welcome-start-btn" onClick={handleStart}>
         시작하기
       </button>
     </div>

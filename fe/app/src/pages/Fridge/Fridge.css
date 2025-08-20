@@ -1,21 +1,25 @@
 /* ===== 페이지 기본 ===== */
 .fridge-page {
   background: #fffaf4;
-  min-height: 100%;
+  height: 100vh;                /* 전체 화면 높이 */
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
-  text-align: center;
-  overflow: hidden; /* 전체 스크롤 막음 */
-  -webkit-tap-highlight-color: transparent; /* 모바일 탭 하이라이트 제거 */
+  overflow-y: auto;             /* 페이지 스크롤 가능 */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
+.fridge-page::-webkit-scrollbar { display: none; }
 
-/* ===== 헤더 영역 (고정) ===== */
+/* ===== 헤더 영역 (스크롤 고정 + 중앙정렬) ===== */
 .fridge-header {
-  flex-shrink: 0;
-  padding: 20px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
   background: #fffaf4;
-  z-index: 1;
+  padding: 20px;
+  z-index: 100;
+  text-align: center;      /* ✅ 전체 중앙 정렬 */
 }
 
 .fridge-title {
@@ -39,7 +43,7 @@
   justify-content: center;
   padding: 4px 12px;
   border: 1.5px solid #ff9844;
-  border-radius: 999px;
+  border-radius: 40px;
   font-size: 13px;
   color: #ff9844;
   background: #fff;
@@ -51,9 +55,11 @@
 .search-box {
   display: flex;
   align-items: center;
+  justify-content: center;   /* ✅ 검색창도 중앙정렬 */
   border-bottom: 1.5px solid #ff9844;
-  margin: 10px 5px 0;
+  margin: 10px auto 0;
   padding: 6px 0;
+  width: 90%;                /* ✅ 가운데 너비 제한 */
 }
 .search-box .search-icon {
   color: #ff9844;
@@ -75,15 +81,11 @@
   font-weight: 500;
 }
 
-/* ===== 스크롤 영역 (재료 + 버튼 공간) ===== */
+/* ===== 본문 영역 ===== */
 .fridge-content {
   flex: 1;
-  overflow-y: auto; /* 여기만 스크롤 */
-  padding: 0 10px calc(140px + env(safe-area-inset-bottom)); /* 버튼+네비 공간 확보 */
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  padding: 0 10px 140px;   /* ✅ 아래 버튼 공간 확보 */
 }
-.fridge-content::-webkit-scrollbar { display: none; }
 
 /* 비어있음/로딩/에러 공통 */
 .empty-state {
@@ -128,34 +130,42 @@
   background: #fffaf4;
 }
 
-/* ===== 생성하기 버튼 ===== */
-.fridge-footer{
+/* ===== 생성하기 버튼 (메뉴 CSS 동일 + 선명하게) ===== */
+.fridge-footer {
   position: fixed;
-  left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 500px; /* 프레임 max와 동일 */
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: auto;
 }
 
 .fridge-footer button {
   width: 327px;
   height: 56px;
   background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
+  box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.45); /* ✅ 그림자 진하게 */
   border-radius: 100px;
   border: none;
-  font-weight: 800;
+  color: white;
+  font-weight: bold;
   font-size: 18px;
-  color: #fff;
-  box-shadow: 0 8px 16px rgba(253, 160, 85, 0.35);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1 !important;       /* ✅ 항상 불투명하게 */
   transition: background .2s ease, transform .02s ease, opacity .15s ease, box-shadow .2s ease;
-  pointer-events: auto; /* 버튼 클릭 가능 */
 }
-.fridge-footer button:hover { background: #ff8d33; }
-.fridge-footer button:active { transform: translateY(1px); }
+
+.fridge-footer button:hover {
+  background: #ff8d33;
+}
+.fridge-footer button:active {
+  transform: translateY(1px);
+}
 .fridge-footer button[disabled] {
   opacity: .5;
   cursor: default;
   box-shadow: none;
 }
-
-
-
