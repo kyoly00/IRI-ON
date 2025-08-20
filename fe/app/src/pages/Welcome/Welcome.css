@@ -1,0 +1,50 @@
+/* ✅ Welcome 전용 화면 */
+.welcome-page {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background: none !important;        /* 기본 배경 제거 */
+  background-color: transparent !important;
+}
+
+.onboarding-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;   /* 이미지 꽉 채우기 */
+}
+
+/* ✅ app-frame에서 welcome 모드일 때 배경 제거 */
+.app-frame.welcome-mode {
+  background: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;  /* 카드 그림자도 제거 */
+}
+
+/* ✅ content가 있으면 거기도 제거 */
+.content.welcome-mode {
+  background: none !important;
+  background-color: transparent !important;
+}
+
+.start-btn {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background-color: #ff914d;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.start-btn:hover {
+  background-color: #ff7a26;
+}
+
