@@ -1,323 +1,170 @@
-/* ============ Theme Tokens (시안 색/그림자) ============ */
-:root {
-  --bg-cream: #FBF4EC;
-  --card: #FFFFFF;
-  --ink: #222222;
-  --muted: #8C8C8C;
-  --primary: #FF7A2F;      /* 포인트 오렌지 */
-  --primary-2: #FF9A54;    /* 그라데이션용 */
-  --chip-bg: #FFF2E8;
-  --chip-bd: #FFD4BF;
-  --line: #EEE6DE;
-
-  --shadow-card: 0 8px 16px rgba(0,0,0,.06);
-  --shadow-strong: 0 14px 30px rgba(255,122,47,.22);
+.w2-page {
+  min-height: 100%;
+  padding: 20px 16px 36px;
+  background: #fff7ee; /* 크림톤 */
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
 }
 
-/* 배경 톤 더 부드럽게 */
-.profile-page{
-  background: var(--bg-cream);
-  color: var(--ink);
-  letter-spacing: -0.2px;
+.w2-header {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  margin-top: 4px;
 }
-
-/* ============ 헤더 ============ */
-.header { text-align:center; }
-.title {
-  font-size: 18px;
+.w2-header h1 {
+  margin: 6px 0 6px;
+  font-size: 20px;
   font-weight: 800;
-  margin: 6px 0 10px;
+  color: #2c2c2c;
 }
-.subtitle {
+.w2-header p {
+  margin: 0;
   font-size: 12px;
-  line-height: 1.55;
   color: #666;
-  margin: 0 0 18px;
+  line-height: 1.5;
 }
-.linkish { color:#3F7CFB; text-decoration: underline; text-underline-offset: 3px; }
 
-/* ============ 아바타 ============ */
-.avatar-ring{
-  width: 116px; height: 116px;
-  margin: 6px auto 8px;
+.w2-hero {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.w2-avatar {
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
-  display: grid; place-items: center;
-  background: radial-gradient(105% 105% at 50% 0%, #FFDDEA 0%, #FFE9DD 58%, #FFF 100%);
-  box-shadow:
-    inset 0 0 0 6px #FFC4D7,
-    0 10px 22px rgba(0,0,0,.08);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+  background: #fff;
+  object-fit: cover;
 }
-.avatar-ring img{
-  width: 86px; height: 86px;
-  border-radius: 50%; object-fit: cover;
-}
-.child-name{
-  margin-top: 8px;
-  font-size: 16px; font-weight: 800;
+.w2-name {
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: #fff;
+  padding: 0 14px;
+  font-size: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
 }
 
-/* ============ 섹션 타이틀/아이콘 ============ */
-.section{ margin-top: 22px; }
-.section-label{
-  display: flex; align-items: center; gap: 8px;
-  font-weight: 800; font-size: 15px;
+.w2-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(255,145,77,0.12);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.w2-card-title {
+  font-weight: 700;
+  color: #333;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.icon-orange{ color: var(--primary); font-style: normal; }
-.icon-red{ color: #E74A36; font-style: normal; }
+.w2-emoji { font-size: 18px; }
 
-/* ============ 안전 도구 2×2 카드 ============ */
-.cards-2col{
+.w2-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.safety-card{
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 18px 14px;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-}
-.safety-card .s-icon{ font-size: 26px; }
-.safety-card .s-title{ font-weight: 800; font-size: 15px; }
-.safety-card .s-desc{ font-size: 12px; color: #7C7C7C; }
-.safety-card.on{
-  border-color: var(--primary);
-  box-shadow: var(--shadow-strong);
-}
-
-/* ============ 보유 조리도구 3×2 그리드 ============ */
-.grid-tools{
+.w2-grid-3 {
   display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
-.tool-chip{
-  background: var(--card);
-  border: 1px solid var(--line);
+
+.w2-tool {
+  background: #fffaf6;
+  border: 1.5px solid #ffe1cd;
   border-radius: 16px;
-  padding: 16px 10px;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all .15s ease;
 }
-.tool-chip .t-emoji{ font-size: 22px; }
-.tool-chip .t-text{ font-size: 13px; color: #5A5A5A; }
-.tool-chip.on{
-  border-color: var(--primary);
-  box-shadow: var(--shadow-strong);
+.w2-tool .w2-icon { font-size: 22px; margin-bottom: 6px; }
+.w2-tool .w2-tool-title { font-weight: 800; color: #333; }
+.w2-tool .w2-tool-sub { font-size: 12px; color: #777; }
+
+.w2-tool.active {
+  background: #ffe9da;
+  border-color: #ffb98f;
+  box-shadow: 0 6px 16px rgba(255,145,77,0.28);
 }
 
-/* ============ 냉장고 CTA 버튼(연한 캡슐) ============ */
-.fridge-cta{
-  width: 100%; height: 50px;
-  border: 1px solid #FFE4D3;
-  border-radius: 999px;
-  background: linear-gradient(180deg,#FFF9F4 0%,#FFF4EA 100%);
-  display: flex; align-items: center; justify-content: center;
-  gap: 8px;
-  font-weight: 800;
-  color: var(--primary);
-  box-shadow: 0 10px 20px rgba(0,0,0,.06);
+.w2-appliance {
+  background: #fff;
+  border: 1.5px solid #eee;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  transition: all .15s ease;
 }
-.fridge-cta .arrow{ margin-left: 6px; }
-
-/* ============ 레벨 카드 캐러셀 ============ */
-.levels{
-  display: flex; gap: 12px;
-  overflow-x: auto;
-  padding: 2px 2px 8px;
-  scroll-snap-type: x mandatory;
-}
-.level-card{
-  min-width: 140px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 12px 12px 14px;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-  scroll-snap-align: start;
-}
-.lv-badge{
-  display: inline-block;
-  font-size: 12px; font-weight: 800; color: var(--primary);
-  background: #FFF1E7; border-radius: 999px; padding: 4px 10px;
-  margin-bottom: 8px;
-}
-.lv-img{ width: 64px; height: 64px; display: block; margin: 0 auto 8px; object-fit: contain; }
-.lv-title{ font-weight: 800; margin-bottom: 4px; }
-.lv-desc{ font-size: 12px; color: #7A7A7A; }
-.level-card.active{
-  border-color: var(--primary);
-  box-shadow: var(--shadow-strong);
+.w2-appliance.selected {
+  background: #fff4ea;
+  border-color: #ffb98f;
+  box-shadow: 0 4px 12px rgba(255,145,77,0.2);
 }
 
-/* ============ 알러지 칩 / 드롭다운 ============ */
-.chips{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.chip{
-  border: 1px solid var(--chip-bd);
-  background: var(--chip-bg);
-  color: #D6632A;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 13px; font-weight: 700;
-  display: inline-flex; align-items: center; gap: 6px;
-  box-shadow: 0 6px 14px rgba(255,122,47,.1);
+.w2-inline-cta {
+  margin-top: 12px;
+  background: transparent;
+  border: none;
+  color: #ff914d;
+  font-weight: 700;
+  cursor: pointer;
 }
-.chip .x{ margin-left: 2px; }
-.dropdown{ position: relative; }
-.dd-input{
-  width: 100%; height: 52px;
+
+.w2-select-row { margin-bottom: 10px; }
+.w2-select {
+  width: 100%;
+  height: 44px;
   border-radius: 14px;
-  border: 1px solid #E6E1DA;
-  background: var(--card);
-  padding: 0 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  box-shadow: var(--shadow-card);
-}
-.dd-input .muted{ color: #9B9B9B; }
-.dd-input.open{ border-color: var(--primary); }
-.dd-menu{
-  position: absolute; left: 0; right: 0; top: 56px; z-index: 5;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 14px 28px rgba(0,0,0,.12);
-  overflow: hidden;
-}
-.dd-item{
-  width: 100%; padding: 12px 14px; text-align: left;
-  border-bottom: 1px solid #F3EEE8;
-  display: flex; align-items: center; justify-content: space-between;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;
+  padding: 0 12px;
   font-size: 14px;
 }
-.dd-item:last-child{ border-bottom: none; }
-.dd-item.on{ color: var(--primary); font-weight: 800; }
 
-/* ============ 하단 CTA ============ */
-.submit-wrap{
-  position: sticky; bottom: max(env(safe-area-inset-bottom,12px), 12px);
-  margin-top: 20px;
+.w2-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
 }
-.submit-btn{
-  width: 100%; height: 56px; border: none; border-radius: 999px;
-  background: linear-gradient(135deg, var(--primary-2), var(--primary));
-  color: #fff; font-weight: 800; font-size: 16px;
-  box-shadow: var(--shadow-strong);
-}
-
-/* =========================
-   1) 헤더 톤/간격/링크 처리
-========================= */
-
-/* 타이틀 컬러/두께 살짝 강화 */
-.title{
-  color:#FF7A2F;
-  font-size:19px;
-  font-weight:900;
-  letter-spacing:-.2px;
-  margin:10px 0 12px;
+.w2-chip {
+  background: #fff4ea;
+  border: 1px solid #ffd2b3;
+  color: #ff7a26;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-/* 보조문구: 링크 밑줄 제거 + 톤 다운 + 폭 제한 */
-.subtitle{
-  color:#6E6E6E;
-  font-size:13px;
-  line-height:1.55;
-  max-width:260px;         /* 문단 폭 좁혀서 가독성 ↑ */
-  margin:0 auto 20px;      /* 가운데 정렬 & 하단 여백 */
-  text-decoration:none;
+.w2-submit {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px 20px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #ff9e63, #ff914d);
+  color: #fff;
+  font-weight: 800;
+  border: none;
+  box-shadow: 0 8px 22px rgba(255,145,77,0.35);
+  cursor: pointer;
+  transition: background .2s ease, transform .02s ease;
 }
-.subtitle a,
-.linkish{
-  color:#6E6E6E;           /* 파란 밑줄 대신 중립 톤 */
-  text-decoration:none;    /* 밑줄 제거 */
-  font-weight:600;
-}
-
-/* 아바타링 살짝 작게 + 여백 조정 (시안 느낌) */
-.avatar-ring{
-  width:112px;height:112px;margin:8px auto 10px;
-  box-shadow: inset 0 0 0 6px #FFC4D7, 0 10px 22px rgba(0,0,0,.08);
-}
-.avatar-ring img{ width:84px;height:84px; }
-
-/* 이름 여백 및 굵기 */
-.child-name{ margin-top:8px; font-size:16px; font-weight:800; }
-
-/* 섹션 타이틀 간격 살짝 정리 */
-.section{ margin-top:22px; }
-.section-label{ margin-bottom:12px; }
-
-/* =========================
-   2) 드롭다운 스타일 정리
-   - 상단 인풋 하이라이트/화살표 회전
-   - 메뉴 둥근 모서리 + 그림자
-   - hover/선택 시 배경/체크 표시
-========================= */
-
-.dropdown{ position:relative; z-index:20; }
-
-.dd-input{
-  height:52px;
-  border-radius:14px;
-  border:1.5px solid #E8E2DA;
-  background:#fff;
-  padding:0 14px;
-  display:flex; align-items:center; justify-content:space-between;
-  box-shadow: 0 8px 16px rgba(0,0,0,.06);
-  transition: border-color .18s ease, box-shadow .18s ease;
-}
-.dd-input .muted{ color:#9B9B9B; }
-.dd-input .chev{ transition: transform .18s ease; }
-.dd-input.open{
-  border-color:#FF7A2F;
-  box-shadow: 0 12px 26px rgba(255,122,47,.18);
-}
-.dd-input.open .chev{ transform: rotate(180deg); }
-
-/* 메뉴 컨테이너: 인풋 아래로 살짝 띄우고 최대 높이 부여 */
-.dd-menu{
-  position:absolute; left:0; right:0; top:calc(100% + 8px);
-  background:#fff;
-  border:1px solid #F0E9E1;
-  border-radius:14px;
-  box-shadow: 0 16px 28px rgba(0,0,0,.12);
-  overflow:auto;
-  max-height:264px;                 /* 리스트가 길면 내부 스크롤 */
-}
-
-/* 스크롤바 얇게 */
-.dd-menu::-webkit-scrollbar{ width:8px; }
-.dd-menu::-webkit-scrollbar-thumb{
-  background:#E9E2DA; border-radius:8px;
-}
-
-/* 항목: 높이/간격/구분선/호버/선택 */
-.dd-item{
-  display:flex; align-items:center; gap:8px;
-  padding:14px 16px;
-  font-size:14px;
-  border-bottom:1px solid #F3EFE9;
-  transition: background-color .12s ease, color .12s ease;
-}
-.dd-item:last-child{ border-bottom:none; }
-.dd-item:hover{ background:#FFF7F0; }
-.dd-item.on{
-  color:#FF7A2F; font-weight:800; background:#FFF2E8;
-}
-/* 선택 체크마크(우측) */
-.dd-item.on::after{
-  content:"✔"; margin-left:auto; font-size:13px; color:#FF7A2F;
-}
-
-/* 드롭다운이 화면 하단에 가까울 때 위로 띄우고 싶으면
-   .dd-menu에 .up 클래스를 토글해서 사용하세요 */
-.dd-menu.up{
-  top:auto; bottom:calc(100% + 8px);
-}
-
+.w2-submit:hover { background: #ff7a26; }
+.w2-submit:active { transform: translateY(1px); }

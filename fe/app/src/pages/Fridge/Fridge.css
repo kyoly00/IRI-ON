@@ -1,288 +1,161 @@
+/* ===== 페이지 기본 ===== */
 .fridge-page {
-  background: #fbf7ef;
-  min-height: 100vh;
-  padding: 20px;
-  padding-bottom: 120px;
-}
-
-/* 상단 헤더 */
-.fridge-header {
+  background: #fffaf4;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
   text-align: center;
-  margin-bottom: 20px;
+  overflow: hidden; /* 전체 스크롤 막음 */
+  -webkit-tap-highlight-color: transparent; /* 모바일 탭 하이라이트 제거 */
 }
 
-.fridge-header h1 {
-  font-size: 20px;
-  font-weight: bold;
-  color: #121213;
+/* ===== 헤더 영역 (고정) ===== */
+.fridge-header {
+  flex-shrink: 0;
+  padding: 20px;
+  background: #fffaf4;
+  z-index: 1;
 }
 
-.fridge-header p {
+.fridge-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 20px 0 10px;
+  color: #2b2b2b;
+}
+
+.fridge-desc {
   font-size: 14px;
-  font-weight: 500;
-  color: rgba(0, 0, 0, 0.5);
-  margin-top: 4px;
-  line-height: 1.4;
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.5;
 }
 
-.date-badge {
-  display: inline-block;
-  margin-top: 10px;
-  padding: 6px 14px;
+/* 날짜칩 */
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border: 1.5px solid #ff9844;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #ff9844;
   background: #fff;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  margin: 0 auto 15px;
+  box-shadow: 0 2px 8px rgba(253,160,85,0.12);
 }
 
 /* 검색창 */
-.search-bar {
+.search-box {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: #fff; /* 배경 흰색으로 변경 */
-  border-radius: 8px;
-  border: 1.5px solid #fda055;
-  padding: 6px 10px;
-  margin-top: 16px;
-  margin-bottom: 20px;
+  border-bottom: 1.5px solid #ff9844;
+  margin: 10px 5px 0;
+  padding: 6px 0;
 }
-
-.search-bar input {
+.search-box .search-icon {
+  color: #ff9844;
+  font-size: 18px;
+  opacity: .9;
+}
+.search-box input {
   border: none;
   outline: none;
   flex: 1;
+  font-size: 16px;
+  margin-left: 8px;
   background: transparent;
-  font-size: 14px;
+  color: #333;
+  font-weight: 700;
+}
+.search-box input::placeholder {
+  color: #b7b7b7;
+  font-weight: 500;
 }
 
-.search-icon {
-  color: #fda055;
+/* ===== 스크롤 영역 (재료 + 버튼 공간) ===== */
+.fridge-content {
+  flex: 1;
+  overflow-y: auto; /* 여기만 스크롤 */
+  padding: 0 10px calc(140px + env(safe-area-inset-bottom)); /* 버튼+네비 공간 확보 */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.fridge-content::-webkit-scrollbar { display: none; }
+
+/* 비어있음/로딩/에러 공통 */
+.empty-state {
+  width: 100%;
+  text-align: center;
+  color: #888;
+  padding: 24px 0;
   font-size: 14px;
 }
+.empty-state.error { color: #d33; }
 
 /* 재료 그리드 */
 .ingredient-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 10px;
 }
-
-/* 재료 카드 */
 .ingredient-card {
+  height: 80px;
+  border-radius: 14px;
   background: #fff;
-  border-radius: 16px;
-  padding: 12px 8px;
-  text-align: center;
+  border: 1.5px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 17px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid #fff;
+  transition: transform .02s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  color: #2f2f2f;
 }
-
+.ingredient-card:hover { border-color: #ffd2b3; }
+.ingredient-card:active { transform: translateY(1px); }
+.ingredient-card:focus-visible {
+  outline: 2px solid #ff9844;
+  outline-offset: 2px;
+  border-radius: 16px;
+}
 .ingredient-card.selected {
-  border: 2px solid #fda055;
-  box-shadow: 0px 4px 12px rgba(253, 160, 85, 0.25);
+  border: 2px solid #ff9844;
+  box-shadow: 0 4px 12px rgba(253, 160, 85, 0.25);
+  background: #fffaf4;
 }
 
-.ingredient-card img {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
-  margin-bottom: 6px;
-}
-
-.ingredient-card span {
-  font-size: 12px;
-  font-weight: 500;
-  color: #121213;
-}
-
-/* 하단 버튼 (1cm 위) */
-.bottom-btn {
+/* ===== 생성하기 버튼 ===== */
+.fridge-footer{
   position: fixed;
-  bottom: 120px; /* 80px → 100px로 변경 (1cm 위) */
-  left: 50%;
-  transform: translateX(-50%);
+  left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 500px; /* 프레임 max와 동일 */
+}
+
+.fridge-footer button {
   width: 327px;
-  height: 50px;
+  height: 56px;
   background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
-  box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.35);
   border-radius: 100px;
   border: none;
-  color: white;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-/* 하단 네비게이션 */
-.Fridege-bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background: #fff;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  display: flex;
-  justify-content: space-around;
-  padding: 10px 0;
-}
-
-.nav-item {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.4);
-}
-
-.nav-item.active {
-  color: #fda055;
-  font-weight: bold;
-}
-
-/* 팝업 오버레이 */
-.popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 200;
-}
-
-/* 팝업 카드 */
-.popup-card {
-  background: #fff;
-  border-radius: 20px;
-  padding: 20px;
-  width: 280px;
-  text-align: center;
-  box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.2);
-  position: relative;
-}
-
-.popup-card img {
-  width: 100px;
-  height: auto;
-  margin-bottom: 15px;
-}
-
-.popup-card p {
-  font-size: 14px;
-  color: #555;
-  margin-bottom: 10px;
-}
-
-.example-text {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.5);
-  border: 1px solid #fda055;
-  padding: 6px 12px;
-  border-radius: 30px;
-  display: inline-block;
-}
-
-.popup-arrow {
-  position: absolute;
-  bottom: 15px;
-  right: 15px;
-  background: none;
-  border: 1px solid #fda055;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  color: #fda055;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-
-.amount-input::placeholder {
-  color: rgba(0, 0, 0, 0.4);
-}
-
-.amount-input-wrapper {
-  display: flex;
-  align-items: center;
-  width: 100%;              /* 부모(모달) 안에서만 꽉 차게 */
-  max-width: 280px;         /* 입력창이 너무 길어지지 않게 */
-  margin: 0 auto;           /* 가운데 정렬 */
-  border: 1px solid #fda055;
-  border-radius: 12px;
-  overflow: hidden;         /* 둥근 모서리 안에 버튼 포함 */
-}
-
-/* 입력창 */
-.amount-input {
-  flex: 1;                  /* 버튼 제외한 나머지 영역 채우기 */
-  padding: 10px 12px;
-  border: none;
-  outline: none;
-  font-size: 14px;
-}
-
-/* 버튼 */
-.amount-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;               /* 버튼 크기 고정 */
-  height: 100%;              /* 입력창 높이와 동일하게 */
-  background: white;
-  color: #fda055;
-  border: none;
+  font-weight: 800;
   font-size: 18px;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(253, 160, 85, 0.35);
   cursor: pointer;
+  transition: background .2s ease, transform .02s ease, opacity .15s ease, box-shadow .2s ease;
+  pointer-events: auto; /* 버튼 클릭 가능 */
+}
+.fridge-footer button:hover { background: #ff8d33; }
+.fridge-footer button:active { transform: translateY(1px); }
+.fridge-footer button[disabled] {
+  opacity: .5;
+  cursor: default;
+  box-shadow: none;
 }
 
-/* 재료 그리드 - 스크롤 추가 */
-.ingredient-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  max-height: 400px; /* 스크롤 영역 높이 */
-  overflow-y: auto;
-  padding-right: 8px; /* 스크롤바 공간 확보 */
-}
 
-/* 예쁜 스크롤바 스타일 */
-.ingredient-grid::-webkit-scrollbar {
-  width: 8px;
-}
 
-.ingredient-grid::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #ffb173, #ff9844);
-  border-radius: 4px;
-}
-
-.ingredient-grid::-webkit-scrollbar-track {
-  background: #f5e9dc;
-  border-radius: 4px;
-}
-
-/* 재료 카드 */
-.ingredient-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 12px 8px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid #fff;
-}
-
-.ingredient-card.selected {
-  border: 2px solid #fda055;
-  box-shadow: 0px 4px 12px rgba(253, 160, 85, 0.25);
-}
-
-.ingredient-card span {
-  font-size: 12px;
-  font-weight: 500;
-  color: #121213;
-}
