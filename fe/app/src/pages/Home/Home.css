@@ -1,0 +1,73 @@
+.home-page {
+  min-height: 100vh;
+  background: #fff7ee;
+  padding-bottom: 24px;
+}
+
+/* 상단 바 */
+.home-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 6px;
+}
+.home-logo { height: 28px; object-fit: contain; }
+.home-actions { display: flex; gap: 12px; font-size: 20px; color: #333; }
+
+/* 히어로 */
+.hero {
+  display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center;
+  padding: 10px 16px 0;
+}
+.hero-chef { width: 120px; height: auto; }
+.hero-ment {
+  width: 100%; height: auto; max-height: 140px; object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(255,145,77,0.18));
+}
+
+/* 인기 섹션 */
+.popular { padding: 12px 16px 0; }
+.sec-title {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 800; font-size: 16px; color: #2c2c2c; margin: 6px 0 10px;
+}
+.star { font-size: 18px; }
+
+/* 카테고리 칩 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip {
+  background: #fff; border: 1px solid #f1e2d6; color: #666;
+  padding: 8px 12px; border-radius: 999px; font-size: 13px;
+  cursor: pointer; transition: all .15s ease;
+}
+.chip.active {
+  background: #fff4ea; color: #ff7a26; border-color: #ffb98f;
+  box-shadow: 0 6px 14px rgba(255,145,77,.20);
+}
+
+/* 메뉴 카드 */
+.menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.menu-card {
+  background: #fff; border: 1px solid rgba(0,0,0,.04); border-radius: 18px; padding: 12px;
+  box-shadow: 0 8px 24px rgba(255,145,77,0.12); cursor: pointer;
+  transition: transform .02s ease, box-shadow .15s ease;
+}
+.menu-card:active { transform: translateY(1px); }
+.thumb {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 14px; background: #fff4ea;
+  display: grid; place-items: center; margin-bottom: 10px;
+}
+.thumb-emoji { font-size: 34px; }
+.menu-name { font-weight: 800; font-size: 14px; color: #333; }
+.menu-meta { display: flex; align-items: center; gap: 6px; color: #777; font-size: 12px; margin-top: 6px; }
+.meta-icon { opacity: .7; }
+
+/* CTA */
+.cta {
+  width: 100%; margin-top: 14px; padding: 15px 20px; border-radius: 28px;
+  background: linear-gradient(180deg, #ff9e63, #ff914d); color: #fff;
+  font-weight: 800; font-size: 15px; border: none;
+  box-shadow: 0 10px 24px rgba(255,145,77,0.35); cursor: pointer;
+  transition: background .2s ease, transform .02s ease;
+}
+.cta:hover { background: #ff7a26; }
+.cta:active { transform: translateY(1px); }
+.cta .arrow { margin-left: 6px; }

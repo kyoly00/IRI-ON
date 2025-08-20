@@ -1,18 +1,18 @@
 // src/pages/Welcome/Welcome.jsx
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import "./Welcome.css";  // 스타일 있으면 유지
+import "./Welcome.css";
 
 export default function Welcome() {
   const navigate = useNavigate();
 
   const handleStart = () => {
-    navigate("/welcome1");
+    navigate("/welcome1"); // 👉 버튼 누르면 welcome1으로 이동
   };
 
   return (
     <div className="welcome-page">
-      <h1>요리 도우미에 오신 걸 환영합니다 👩‍🍳</h1>
-      <p>아이들이 안전하게 요리할 수 있도록 함께 도와드려요!</p>
+      <img src="/Onboarding.png" alt="온보딩" className="onboarding-img" />
       <button className="start-btn" onClick={handleStart}>
         시작하기
       </button>

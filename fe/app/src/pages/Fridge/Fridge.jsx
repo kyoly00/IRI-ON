@@ -1,129 +1,142 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./Fridge.css";
-import { FaSearch } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { FaSearch, FaClock } from "react-icons/fa";
+
+const API_BASE = "http://127.0.0.1:8000";
 
 export default function Fridge() {
+  const [ingredients, setIngredients] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [ingredients, setIngredients] = useState([]); // 백엔드에서 불러올 재료
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [errMsg, setErrMsg] = useState("");
+
   const navigate = useNavigate();
 
-  // 📌 페이지 로드 시 재료 불러오기
-  useEffect(() => {
-    const fetchIngredients = async () => {
-      try {
-        const res = await fetch("http://localhost:8000/ingredients/"); // ✅ 수정된 경로
-        if (!res.ok) throw new Error("서버 응답 오류");
-        const data = await res.json();
-        setIngredients(data);
-      } catch (err) {
-        console.error("❌ 재료 불러오기 실패:", err);
-      }
-    };
-    fetchIngredients();
+  // 날짜 포맷: 08.26 화
+  const dateLabel = useMemo(() => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+    const wd = weekdays[d.getDay()];
+    return `${mm}.${dd} ${wd}`;
   }, []);
 
-  // 재료 선택 토글
-  const handleSelect = (item) => {
-    setSelected((prev) =>
-      prev.includes(item.ingredient_id)
-        ? prev.filter((x) => x !== item.ingredient_id)
-        : [...prev, item.ingredient_id]
-    );
-  };
-  // 선택된 재료 서버에 저장 후 이동
-const goToComplete = async () => {
-  try {
-    // 선택된 재료 하나씩 서버로 전송
-    for (let id of selected) {
-      const payload = { ingredient_id: id }; // ✅ 스펙에 맞게 구성
-      const url = "http://localhost:8000/users/ingredients";
-      console.log("→ POST", url, payload);
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const raw = await res.text();
-      if (!res.ok) {
-        console.error(`❌ 재료 ${id} 저장 실패:`, res.status, res.statusText, raw);
-        alert(`재료 저장 실패 (ingredient_id: ${id}, HTTP ${res.status})`);
-        return; // 하나라도 실패하면 중단
-      }
-
-      let data = null;
+  // 백엔드 연동
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
       try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        data = raw;
+        setLoading(true);
+        setErrMsg("");
+        const res = await fetch(`${API_BASE}/ingredients/`, { signal: ac.signal });
+        if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+        const data = await res.json();
+        setIngredients(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.error("❌ 재료 불러오기 실패:", err);
+          setErrMsg("재료 목록을 불러오지 못했습니다.");
+        }
+      } finally {
+        setLoading(false);
       }
+    })();
+    return () => ac.abort();
+  }, []);
 
-      console.log(`✅ 재료 ${id} 저장 성공, 서버 응답:`, data);
-      alert(`재료 ${id} 저장 성공 (user_id: ${data.user_id})`);
-    }
+  // 선택 토글
+  const toggleSelect = (id) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
-    // 모든 저장 완료 시 페이지 이동
-    alert("모든 재료 저장 완료!");
-    navigate("/fridgecomplete");
+  // 생성하기 버튼
+  const goToComplete = () => {
+    navigate("/fridgeComplete", { state: { selected } });
+  };
 
-  } catch (error) {
-    console.error("❌ 네트워크/코르스 에러:", error);
-    alert("저장 실패 (네트워크/CORS)");
-  }
-};
-
-
-
+  // 검색 필터 (공백/대소문자 무시)
+  const filteredIngredients = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return ingredients;
+    return ingredients.filter((item) => String(item.name).toLowerCase().includes(q));
+  }, [ingredients, searchTerm]);
 
   return (
     <div className="fridge-page">
-      {/* 상단 헤더 */}
+      {/* ===== 헤더 ===== */}
       <header className="fridge-header">
-        <h1>냉장고 만들기</h1>
-        <p>
-          냉장고 속 재료를 선택하고,<br />레시피를 추천받으세요!
+        <h1 className="fridge-title">냉장고 만들기</h1>
+        <p className="fridge-desc">
+          냉장고 속 재료를 선택하고,
+          <br />
+          메뉴를 추천받으세요!
         </p>
-        <div className="date-badge">08.11 월</div>
+
+        {/* 날짜 */}
+        <div className="date-chip">
+          <FaClock aria-hidden style={{ marginRight: 6 }} />
+          {dateLabel}
+        </div>
+
+        {/* 검색창 */}
+        <div className="search-box">
+          <FaSearch className="search-icon" aria-hidden />
+          <input
+            type="text"
+            placeholder="재료를 검색하세요."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="재료 검색"
+          />
+        </div>
       </header>
 
-      {/* 검색 바 */}
-      <div className="search-bar">
-        <FaSearch className="search-icon" />
-        <input placeholder="재료를 검색하세요." />
-      </div>
+      {/* ===== 본문 ===== */}
+      <main className="fridge-content">
+        {loading ? (
+          <div className="empty-state">불러오는 중...</div>
+        ) : errMsg ? (
+          <div className="empty-state error">{errMsg}</div>
+        ) : filteredIngredients.length === 0 ? (
+          <div className="empty-state">표시할 재료가 없어요.</div>
+        ) : (
+          <div className="ingredient-grid">
+            {filteredIngredients.map((item) => {
+              const id = item.ingredient_id;
+              const isSelected = selected.includes(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`ingredient-card ${isSelected ? "selected" : ""}`}
+                  onClick={() => toggleSelect(id)}
+                  aria-pressed={isSelected}
+                >
+                  <span className="ingredient-name">{item.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </main>
 
-      {/* 재료 목록 */}
-<div className="ingredient-grid">
-  {ingredients.length > 0 ? (
-    ingredients.map((item) => (
-      <div
-        key={item.ingredient_id}
-        className={`ingredient-card ${selected.includes(item.ingredient_id) ? "selected" : ""}`}
-        onClick={() => handleSelect(item)}
-      >
-        <span>{item.name}</span> {/* ✅ 이름만 표시 */}
-      </div>
-    ))
-  ) : (
-    <p>재료를 불러오는 중...</p>
-  )}
-</div>
+      {/* ===== 푸터 ===== */}
+      <footer className="fridge-footer">
+        <button
+          onClick={goToComplete}
+          disabled={selected.length === 0}
+          className="create-btn"
+          aria-disabled={selected.length === 0}
+          title={selected.length === 0 ? "재료를 하나 이상 선택하세요" : undefined}
+        >
+          생성하기{selected.length > 0 ? ` (${selected.length})` : ""}
+        </button>
+      </footer>
 
-
-      {/* 하단 버튼 */}
-      <button className="bottom-btn" onClick={goToComplete}>
-        생성하기
-      </button>
-
-      {/* 하단 네비게이션 */}
-      <nav className="bottom-nav">
-        <div className="nav-item">홈</div>
-        <div className="nav-item active">냉장고</div>
-        <div className="nav-item">메뉴</div>
-        <div className="nav-item">프로필</div>
-      </nav>
+      {/* ⛔️ 페이지 내부 bottom-nav는 제거 (MainLayout에서 렌더링되도록) */}
     </div>
   );
 }
