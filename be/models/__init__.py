@@ -7,12 +7,16 @@ __all__ = [
     "FoodCategory",
     "Ingredient",
     "Notification",
+    "Tool",
     "RecipeCategory",
     "RecipeIngredient",
     "Recipe",
+    "RecipeStep",
+    "RecipeTool",
     "User",
     "UserAllergy",
     "UserFavoriteCategory",
     "UserIngredient",
-    "UserSpeciality"
+    "UserSpeciality",
+    "UserTool"
 ]
