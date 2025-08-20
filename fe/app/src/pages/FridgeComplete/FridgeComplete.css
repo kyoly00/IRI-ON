@@ -1,120 +1,63 @@
+/* 카드 전체 채우기 */
 .complete-page {
+  position: relative;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  background: #fdf9f3;
+  padding: 72px 20px 40px;  /* 상단 로고 공간 확보 + 하단 여유 */
+}
+
+/* 상단 고정 로고 */
+.complete-page .top-logo {
+  position: absolute; top: 20px; left: 20px;
+  width: 120px; height: auto;
+}
+
+/* ✅ 가운데 묶음: 중앙 정렬 후 살짝 아래로 */
+.center-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
-  background-color: #fdf9f3;
-  padding: 20px;
+  gap: 16px;
+  min-height: calc(100% - 72px - 40px); /* 패딩 제외한 영역 */
+  justify-content: center;               /* 수직 중앙 */
+  transform: translateY(24px);           /* 🔻 아래로 24px 내리기 (원하면 수치 조절) */
 }
 
-.complete-header {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logo {
-  font-family: 'Arial Black', sans-serif;
-  font-size: 24px;
-  color: #e6a44f;
-}
-.logo span {
-  color: #d18b2c;
-}
-
-.settings-btn {
-  background: #fff;
-  border: none;
-  border-radius: 50%;
-  padding: 6px;
-  font-size: 18px;
-  cursor: pointer;
-}
-
+/* 아이콘/텍스트/버튼 기존 스타일 유지 */
 .main-icon-wrapper {
-  position: relative;
-  width: 261px;
-  height: 261px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 261px; height: 261px;
+  display: flex; justify-content: center; align-items: center;
 }
 
 .main-icon {
-  position: relative;
-  width: 220px;
-  height: 220px;
-  border-radius: 200px;
+  width: 240px; height: 240px; border-radius: 200px;
   background: linear-gradient(99.78deg, #FFB173 15.81%, #FF9844 99.79%),
               radial-gradient(77.75% 77.75% at 50% 50%, #FCB879 0%, #F6A057 100%);
   box-shadow: 8px 8px 32px rgba(235, 135, 78, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: flex; justify-content: center; align-items: center;
 }
+.main-icon img { width: 120px; height: auto; }
 
-.main-icon svg {
-  width: 120px;
-  height: 107px;
-  fill: white; /* 아이콘 색상 */
+.complete-page .title { font-size: 22px; font-weight: 700; margin-top: 8px; color: #333; }
+.complete-page .subtitle { font-size: 15px; color: #666; margin-bottom: 8px; }
+.complete-page .button-group { display: flex; gap: 12px; }
+
+.complete-page .yes-btn, .complete-page .no-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 18px; border-radius: 20px; font-size: 14px;
+  cursor: pointer; border: 1px solid transparent; background: #fff;
 }
+.complete-page .yes-btn { border-color:#e6a44f; color:#e6a44f; }
+.complete-page .no-btn  { border-color:#999;    color:#999;    }
+.complete-page .yes-btn:hover { background:#e6a44f; color:#fff; }
+.complete-page .no-btn:hover  { background:#999;    color:#fff; }
 
-.main-icon i {
-  width: 120px;
-  height: 106px;
-  fill: white;
+/* 이 페이지일 때 카드 배경 동기화 */
+.app-frame.complete-mode { background-color: #fdf9f3; }
+
+/* 화면이 큰 경우 조금 더 내려도 됨 */
+@media (min-height: 820px) {
+  .center-stack { transform: translateY(40px); }
 }
-
-
-.title {
-  font-size: 20px;
-  font-weight: bold;
-  margin-top: 30px;
-  color: #333;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 40px;
-}
-
-.button-group {
-  display: flex;
-  gap: 12px;
-}
-
-.yes-btn, .no-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.yes-btn {
-  background: #fff;
-  border-color: #e6a44f;
-  color: #e6a44f;
-}
-
-.no-btn {
-  background: #fff;
-  border-color: #999;
-  color: #999;
-}
-
-.yes-btn:hover {
-  background: #e6a44f;
-  color: #fff;
-}
-
-.no-btn:hover {
-  background: #999;
-  color: #fff;
-} 
