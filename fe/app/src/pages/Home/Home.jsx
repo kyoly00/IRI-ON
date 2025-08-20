@@ -1,159 +1,358 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useRef, useEffect } from "react";
+import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
+import { FaCog, FaPlay, FaStop } from "react-icons/fa";
+import { base64ToFloat32Array, float32ToPcm16 } from "../../lib/utils";
+import CookingIcon from "../../assets/cookingexplain.png";
 import "./Home.css";
-import topLogo from "../../assets/top_logo.png";
-import chef3d from "../../assets/3dLogo.png";
-import ment from "../../assets/ment.png";
-import { FiSearch, FiHeart, FiBell, FiClock } from "react-icons/fi";
 
-const API_BASE = "http://localhost:8000"; // Menu.jsx와 동일하게
+export default function CookingExplain() {
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState(null);
+  const [text, setText] = useState('');
+  const [config, setConfig] = useState({
+  systemPrompt: "You are a friendly Gemini 2.0 model. Respond verbally in a casual, helpful tone.",
+  voice: "Puck",
+  googleSearch: true,
+  allowInterruptions: false
+});
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const [videoEnabled, setVideoEnabled] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const videoStreamRef = useRef(null);
+  const videoIntervalRef = useRef(null);
+  const [chatMode, setChatMode] = useState(null);
+  const [videoSource, setVideoSource] = useState(null);
 
-export default function Home() {
-  const nav = useNavigate();
+  const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
+  let audioBuffer = []
+  let isPlaying = false
 
-  // 카테고리
-  const categories = ["한식", "중식", "일식", "양식"];
-  const [activeCat, setActiveCat] = useState("한식");
+  const startStream = async (mode) => {
+    if (mode !== 'audio') {
+      setChatMode('video');
+    } else {
+      setChatMode('audio');
+    }
 
-  // 서버 데이터
-  const [menus, setMenus] = useState([]);   // 항상 배열로 유지
-  const [loading, setLoading] = useState(false);
-  const [errMsg, setErrMsg] = useState("");
+    const backendHost = window.location.hostname;
+    const wsUrl = `ws://${backendHost}:8000/assistant/ws/cook-assistant/1/1`;
 
-  // 카테고리 바뀔 때마다 백엔드에서 가져오기
-  useEffect(() => {
-    const ac = new AbortController();
+    wsRef.current = new WebSocket(wsUrl);
 
-    (async () => {
-      try {
-        setLoading(true);
-        setErrMsg("");
+    wsRef.current.onopen = async () => {
+      wsRef.current.send(JSON.stringify({
+        type: 'config',
+        config: config
+      }));
+      
+      await startAudioStream();
 
-        const qs = new URLSearchParams();
-        // 백엔드가 category 필터를 지원하면 유지, 아니면 이 줄 제거
-        qs.set("category", activeCat);
-
-        const res = await fetch(`${API_BASE}/recipes/?${qs.toString()}`, {
-          signal: ac.signal,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json();
-        setMenus(Array.isArray(data) ? data : []);
-      } catch (e) {
-        if (e.name !== "AbortError") {
-          console.error("Home fetch error:", e);
-          setErrMsg("메뉴를 불러오지 못했어요.");
-          setMenus([]); // 흰화면 방지
-        }
-      } finally {
-        setLoading(false);
+      if (mode !== 'audio') {
+        setVideoEnabled(true);
+        setVideoSource(mode);
       }
-    })();
 
-    return () => ac.abort();
-  }, [activeCat]);
+      setIsStreaming(true);
+      setIsConnected(true);
+    };
 
-  // 홈에서 보여줄 카드 2개만 추려서, 필드명 방어적으로 매핑
-  const cards = useMemo(() => {
-    return menus.slice(0, 2).map((m, i) => ({
-      key: m.recipe_id ?? m.id ?? i,
-      name: m.name ?? "메뉴",
-      time: m.time ?? m.cook_time ?? 0,
-      image: m.image_url ?? "",
+    wsRef.current.onmessage = async (event) => {
+      const response = JSON.parse(event.data);
+      if (response.type === 'audio') {
+        const audioData = base64ToFloat32Array(response.data);
+        playAudioData(audioData);
+      } else if (response.type === 'output_text') {
+        // output_text 타입 처리: Gemini에서 보낸 완성된 텍스트
+        setText(prev => prev + response.data + '\n');
+      } else if (response.type === 'input_text') {
+        // 필요하면 input_text도 처리 가능
+        console.log('Input transcription:', response.data);
+      } else if (response.type === 'turn_complete') {
+        console.log('Turn complete signal received');
+      }
+    };
+
+    wsRef.current.onerror = (error) => {
+      setError('WebSocket error: ' + error.message);
+      setIsStreaming(false);
+    };
+
+    wsRef.current.onclose = () => {
+      setIsStreaming(false);
+    };
+  };
+
+  // Initialize audio context and stream
+  const startAudioStream = async () => {
+    try {
+      // Initialize audio context
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 16000 // Required by Gemini
+      });
+
+      // Get microphone stream
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Create audio input node
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const processor = audioContextRef.current.createScriptProcessor(512, 1, 1);
+      
+      processor.onaudioprocess = (e) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcmData = float32ToPcm16(inputData);
+          // Convert to base64 and send as binary
+          const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
+          wsRef.current.send(JSON.stringify({
+            type: 'audio',
+            data: base64Data
+          }));
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+      
+      audioInputRef.current = { source, processor, stream };
+      setIsStreaming(true);
+    } catch (err) {
+      setError('Failed to access microphone: ' + err.message);
+    }
+  };
+
+  // Stop streaming
+  const stopStream = () => {
+    if (audioInputRef.current) {
+      const { source, processor, stream } = audioInputRef.current;
+      source.disconnect();
+      processor.disconnect();
+      stream.getTracks().forEach(track => track.stop());
+      audioInputRef.current = null;
+    }
+
+    if (chatMode === 'video') {
+      setVideoEnabled(false);
+      setVideoSource(null);
+
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach(track => track.stop());
+        videoStreamRef.current = null;
+      }
+      if (videoIntervalRef.current) {
+        clearInterval(videoIntervalRef.current);
+        videoIntervalRef.current = null;
+      }
+    }
+
+    // stop ongoing audio playback
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    setIsStreaming(false);
+    setIsConnected(false);
+    setChatMode(null);
+  };
+
+  const playAudioData = async (audioData) => {
+    audioBuffer.push(audioData);
+    if (!isPlaying) {
+      playNextInQueue(); // Start playback if not already playing
+    }
+  };
+
+  const playNextInQueue = async () => {
+    if (!audioContextRef.current || audioBuffer.length === 0) {
+      isPlaying = false;
+      return;
+    }
+
+    isPlaying = true;
+    const audioData = audioBuffer.shift();
+
+    const buffer = audioContextRef.current.createBuffer(1, audioData.length, 24000);
+    buffer.copyToChannel(audioData, 0);
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+    source.onended = () => {
+      playNextInQueue();
+    };
+    source.start();
+  };
+
+  useEffect(() => {
+    if (videoEnabled && videoRef.current) {
+      const startVideo = async () => {
+        try {
+          let stream;
+          if (videoSource === 'camera') {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 320 }, height: { ideal: 240 } }
+            });
+          } else if (videoSource === 'screen') {
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+            });
+          }
+          
+          videoRef.current.srcObject = stream;
+          videoStreamRef.current = stream;
+          
+          // Start frame capture after video is playing
+          videoIntervalRef.current = setInterval(() => {
+            captureAndSendFrame();
+          }, 1000);
+
+        } catch (err) {
+          console.error('Video initialization error:', err);
+          setError('Failed to access camera/screen: ' + err.message);
+
+          if (videoSource === 'screen') {
+            // Reset chat mode and clean up any existing connections
+            setChatMode(null);
+            stopStream();
+          }
+
+          setVideoEnabled(false);
+          setVideoSource(null);
+        }
+      };
+
+      startVideo();
+
+      // Cleanup function
+      return () => {
+        if (videoStreamRef.current) {
+          videoStreamRef.current.getTracks().forEach(track => track.stop());
+          videoStreamRef.current = null;
+        }
+        if (videoIntervalRef.current) {
+          clearInterval(videoIntervalRef.current);
+          videoIntervalRef.current = null;
+        }
+      };
+    }
+  }, [videoEnabled, videoSource]);
+
+  // Frame capture function
+  const captureAndSendFrame = () => {
+    if (!canvasRef.current || !videoRef.current || !wsRef.current) return;
+    
+    const context = canvasRef.current.getContext('2d');
+    if (!context) return;
+    
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+    
+    context.drawImage(videoRef.current, 0, 0);
+    const base64Image = canvasRef.current.toDataURL('image/jpeg').split(',')[1];
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'image',
+      data: base64Image
     }));
-  }, [menus]);
+  };
 
-  const goMenu = (opt = {}) => nav("/menu", { state: opt });
-  const goFridge = () => nav("/fridge");
+  // Toggle video function
+  const toggleVideo = () => {
+    setVideoEnabled(!videoEnabled);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopStream();
+    };
+  }, []);
 
   return (
-    <div className="home-page">
-      {/* 상단 바 */}
-      <div className="home-top">
-        <img className="home-logo" src={topLogo} alt="CHEF YUM" />
-        <div className="home-actions">
-          <FiSearch onClick={() => goMenu()} />
-          <FiHeart />
-          <FiBell />
+    <div className="container mx-auto py-8 px-4 space-y-6">
+      <div className="complete-page">
+        <div className="complete-header">
+          <div className="logo">
+            <span>CHEF</span> YUM
+          </div>
+          <button className="settings-btn">
+            <FaCog />
+          </button>
         </div>
+        <div className="main-icon-wrapper">
+          <div className="main-icon pulse-glow">
+            <img src={CookingIcon} alt="조리 아이콘" className="cooking-img" />
+          </div>
+        </div>
+        <h2 className="title">조리 과정 설명 중</h2>
       </div>
 
-      {/* 히어로: 캐릭터 + 멘트 */}
-      <section className="hero">
-        <img className="hero-chef" src={chef3d} alt="셰프 캐릭터" loading="lazy" />
-        <img className="hero-ment" src={ment} alt="환영 멘트" loading="lazy" />
-      </section>
-
-      {/* 인기 메뉴 */}
-      <section className="popular">
-        <div className="sec-title">
-          <span className="star">⭐</span>
-          오늘의 인기 메뉴
-        </div>
-
-        {/* 카테고리 칩 */}
-        <div className="chips">
-          {categories.map((c) => (
-            <button
-              key={c}
-              className={`chip ${activeCat === c ? "active" : ""}`}
-              onClick={() => setActiveCat(c)}
-              type="button"
-              aria-pressed={activeCat === c}
-            >
-              {c}
+      <div className="control-buttons">
+        {!isStreaming ? (
+          <>
+            <button className="play-btn" onClick={() => startStream('audio')} disabled={isStreaming}>
+              <FaPlay /> 재생
             </button>
-          ))}
-        </div>
-
-        {/* 상태별 렌더 */}
-        {loading ? (
-          <div className="menu-grid">
-            <article className="menu-card skeleton" />
-            <article className="menu-card skeleton" />
-          </div>
-        ) : errMsg ? (
-          <div className="empty-state">{errMsg}</div>
-        ) : cards.length === 0 ? (
-          <div className="empty-state">표시할 메뉴가 없어요.</div>
+            <button className="stop-btn" onClick={stopStream} disabled={!isStreaming}>
+              <FaStop /> 정지
+            </button>
+          </>
         ) : (
-          <div className="menu-grid">
-            {cards.map((m) => (
-              <article
-                key={m.key}
-                className="menu-card"
-                onClick={() => goMenu({ category: activeCat, search: m.name })}
-              >
-                <div className="thumb">
-                  {m.image ? (
-                    <img
-                      src={m.image}
-                      alt={m.name}
-                      loading="lazy"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }}
-                    />
-                  ) : (
-                    <span className="thumb-emoji" aria-hidden>
-                      🍽️
-                    </span>
-                  )}
-                </div>
-                <div className="menu-name">{m.name}</div>
-                <div className="menu-meta">
-                  <FiClock className="meta-icon" />
-                  {m.time}분
-                </div>
-              </article>
-            ))}
-          </div>
+          <button className="stop-btn" onClick={stopStream}>
+            <FaStop /> 정지
+          </button>
         )}
+      </div>
 
-        {/* CTA */}
-        <button className="cta" type="button" onClick={goFridge}>
-          나만의 냉장고 만들기 <span className="arrow">→</span>
-        </button>
-      </section>
+      {isStreaming && (
+        <div className="card">
+          <div className="card-content flex items-center justify-center h-24 mt-6">
+            <div className="flex flex-col items-center gap-2">
+              <Mic className="h-8 w-8 text-blue-500 animate-pulse" />
+              <p className="text-gray-600">Listening...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {chatMode === 'video' && (
+        <div className="card">
+          <div className="card-content pt-6 space-y-4">
+            <h2 className="text-lg font-semibold">Video Input</h2>
+            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                width={320}
+                height={240}
+                className="w-full h-full object-contain"
+                style={{ transform: videoSource === 'camera' ? 'scaleX(-1)' : 'none' }}
+              />
+              <canvas ref={canvasRef} className="hidden" width={640} height={480} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {text && (
+        <div className="card">
+          <div className="card-content pt-6">
+            <h2 className="text-lg font-semibold mb-2">Conversation:</h2>
+            <pre className="whitespace-pre-wrap text-gray-700">{text}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
