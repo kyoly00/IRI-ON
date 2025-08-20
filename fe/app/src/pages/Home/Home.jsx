@@ -1,158 +1,112 @@
-import React, { useEffect, useMemo, useState } from "react";
+// Home.jsx
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Home.css";
-import topLogo from "../../assets/top_logo.png";
-import chef3d from "../../assets/3dLogo.png";
-import ment from "../../assets/ment.png";
-import { FiSearch, FiHeart, FiBell, FiClock } from "react-icons/fi";
 
-const API_BASE = "http://localhost:8000"; // Menu.jsx와 동일하게
+import topLogo from "../../assets/top_logo.png";   // CHEF YUM 로고
+import chef3d from "../../assets/3dLogo.png";     // 셰프 캐릭터
+import { FiSearch, FiHeart, FiBell, FiStar, FiClock } from "react-icons/fi";
 
 export default function Home() {
   const nav = useNavigate();
 
-  // 카테고리
-  const categories = ["한식", "중식", "일식", "양식"];
-  const [activeCat, setActiveCat] = useState("한식");
+  // ✅ 메뉴를 하드코딩으로 많이 추가
+  const [menus] = useState([
+    { id: 1, name: "토마토 스파게티", time: "30분", thumb: "🍝" },
+    { id: 2, name: "김치찌개", time: "25분", thumb: "🥘" },
+    { id: 3, name: "초밥", time: "20분", thumb: "🍣" },
+    { id: 4, name: "햄버거", time: "15분", thumb: "🍔" },
+    { id: 5, name: "피자", time: "18분", thumb: "🍕" },
+    { id: 6, name: "라면", time: "10분", thumb: "🍜" },
+    { id: 7, name: "샐러드", time: "12분", thumb: "🥗" },
+    { id: 8, name: "스테이크", time: "40분", thumb: "🥩" },
+    { id: 9, name: "타코", time: "22분", thumb: "🌮" },
+    { id: 10, name: "도넛", time: "8분", thumb: "🍩" },
+    { id: 11, name: "케이크", time: "35분", thumb: "🍰" },
+    { id: 12, name: "팬케이크", time: "15분", thumb: "🥞" },
+  ]);
 
-  // 서버 데이터
-  const [menus, setMenus] = useState([]);   // 항상 배열로 유지
-  const [loading, setLoading] = useState(false);
-  const [errMsg, setErrMsg] = useState("");
+  // ✅ 타이핑 효과용 멘트들
+  const texts = [
+    "안녕! \n나는 AI 요리선생님\n셰프얌이야.",
+    "나만의 냉장고를 만들고\n맞춤 메뉴를 추천받아보자!\n\n오늘은 무엇을 먹을까? 🤔"
+  ];
+  const [displayText, setDisplayText] = useState("");
+  const [textIdx, setTextIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // 카테고리 바뀔 때마다 백엔드에서 가져오기
   useEffect(() => {
-    const ac = new AbortController();
+    const current = texts[textIdx];
+    let timer;
 
-    (async () => {
-      try {
-        setLoading(true);
-        setErrMsg("");
+    if (!isDeleting && charIdx <= current.length) {
+      timer = setTimeout(() => {
+        setDisplayText(current.slice(0, charIdx));
+        setCharIdx((c) => c + 1);
+      }, 120);
+    } else if (isDeleting && charIdx >= 0) {
+      timer = setTimeout(() => {
+        setDisplayText(current.slice(0, charIdx));
+        setCharIdx((c) => c - 1);
+      }, 80);
+    } else if (!isDeleting && charIdx > current.length) {
+      timer = setTimeout(() => setIsDeleting(true), 1500);
+    } else if (isDeleting && charIdx < 0) {
+      setIsDeleting(false);
+      setTextIdx((idx) => (idx + 1) % texts.length);
+      setCharIdx(0);
+    }
 
-        const qs = new URLSearchParams();
-        // 백엔드가 category 필터를 지원하면 유지, 아니면 이 줄 제거
-        qs.set("category", activeCat);
-
-        const res = await fetch(`${API_BASE}/recipes/?${qs.toString()}`, {
-          signal: ac.signal,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json();
-        setMenus(Array.isArray(data) ? data : []);
-      } catch (e) {
-        if (e.name !== "AbortError") {
-          console.error("Home fetch error:", e);
-          setErrMsg("메뉴를 불러오지 못했어요.");
-          setMenus([]); // 흰화면 방지
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-
-    return () => ac.abort();
-  }, [activeCat]);
-
-  // 홈에서 보여줄 카드 2개만 추려서, 필드명 방어적으로 매핑
-  const cards = useMemo(() => {
-    return menus.slice(0, 2).map((m, i) => ({
-      key: m.recipe_id ?? m.id ?? i,
-      name: m.name ?? "메뉴",
-      time: m.time ?? m.cook_time ?? 0,
-      image: m.image_url ?? "",
-    }));
-  }, [menus]);
-
-  const goMenu = (opt = {}) => nav("/menu", { state: opt });
-  const goFridge = () => nav("/fridge");
+    return () => clearTimeout(timer);
+  }, [charIdx, isDeleting, textIdx, texts]);
 
   return (
     <div className="home-page">
-      {/* 상단 바 */}
+      {/* 상단바 */}
       <div className="home-top">
         <img className="home-logo" src={topLogo} alt="CHEF YUM" />
         <div className="home-actions">
-          <FiSearch onClick={() => goMenu()} />
+          <FiSearch onClick={() => nav("/menu")} />
           <FiHeart />
           <FiBell />
         </div>
       </div>
 
-      {/* 히어로: 캐릭터 + 멘트 */}
+      {/* 히어로 영역 */}
       <section className="hero">
-        <img className="hero-chef" src={chef3d} alt="셰프 캐릭터" loading="lazy" />
-        <img className="hero-ment" src={ment} alt="환영 멘트" loading="lazy" />
+        <img className="hero-chef" src={chef3d} alt="셰프 캐릭터" />
+        <div className="hero-ment">
+          {displayText}
+          <span className="cursor">|</span>
+        </div>
       </section>
+
+      {/* CTA 버튼 */}
+      <button className="cta" onClick={() => nav("/fridge")}>
+         나만의 냉장고 만들기
+      </button>
 
       {/* 인기 메뉴 */}
       <section className="popular">
         <div className="sec-title">
-          <span className="star">⭐</span>
+          <FiStar className="star" />
           오늘의 인기 메뉴
         </div>
 
-        {/* 카테고리 칩 */}
-        <div className="chips">
-          {categories.map((c) => (
-            <button
-              key={c}
-              className={`chip ${activeCat === c ? "active" : ""}`}
-              onClick={() => setActiveCat(c)}
-              type="button"
-              aria-pressed={activeCat === c}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        {/* 메뉴 카드 */}
+<div className="menu-list">
+  {menus.map((menu) => (
+    <div key={menu.id} className="menu-card">
+      <div className="thumb">{menu.thumb}</div>
+      <div className="menu-name">{menu.name}</div>
+      <div className="menu-meta">
+        <FiClock /> {menu.time}
+      </div>
+    </div>
+  ))}
+</div>
 
-        {/* 상태별 렌더 */}
-        {loading ? (
-          <div className="menu-grid">
-            <article className="menu-card skeleton" />
-            <article className="menu-card skeleton" />
-          </div>
-        ) : errMsg ? (
-          <div className="empty-state">{errMsg}</div>
-        ) : cards.length === 0 ? (
-          <div className="empty-state">표시할 메뉴가 없어요.</div>
-        ) : (
-          <div className="menu-grid">
-            {cards.map((m) => (
-              <article
-                key={m.key}
-                className="menu-card"
-                onClick={() => goMenu({ category: activeCat, search: m.name })}
-              >
-                <div className="thumb">
-                  {m.image ? (
-                    <img
-                      src={m.image}
-                      alt={m.name}
-                      loading="lazy"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }}
-                    />
-                  ) : (
-                    <span className="thumb-emoji" aria-hidden>
-                      🍽️
-                    </span>
-                  )}
-                </div>
-                <div className="menu-name">{m.name}</div>
-                <div className="menu-meta">
-                  <FiClock className="meta-icon" />
-                  {m.time}분
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-
-        {/* CTA */}
-        <button className="cta" type="button" onClick={goFridge}>
-          나만의 냉장고 만들기 <span className="arrow">→</span>
-        </button>
       </section>
     </div>
   );
