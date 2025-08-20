@@ -6,6 +6,7 @@ from models.domain.ingredient import Ingredient
 from models.domain.tool import Tool, Category as ToolCategory
 from models.recipe.recipe_ingredient import RecipeIngredient
 from models.recipe.recipe_tool import RecipeTool
+from models.recipe.recipe_step import RecipeStep
 from crud.recipe_crud import get_recipe_by_name
 from crud.domain_crud import get_ingredient_id_by_name, get_tool_id_by_name
 
@@ -175,9 +176,38 @@ def seed_recipes_tools():
     finally:
         db.close()
 
+
+def seed_videos():
+    db = SessionLocal()
+    try:
+        with open("data/shrimp_fried_rice_recipe_steps.csv", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if db.query(RecipeStep).count() == 0:
+                existing_keys = []
+
+                for row in reader:
+                    if (row["recipe_id"], row["step"]) in existing_keys:
+                        continue
+
+                    recipe_step = RecipeStep(
+                        recipe_id=row["recipe_id"],
+                        step=row["step"],
+                        url=row["url"]
+                    )
+                    db.add(recipe_step)
+                    existing_keys.append((row["recipe_id"], row["step"]))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
 def seed():
     seed_recipes()
     seed_ingredients()
     seed_recipes_ingredients()
     seed_tools()
     seed_recipes_tools()
+    seed_videos()
+    
