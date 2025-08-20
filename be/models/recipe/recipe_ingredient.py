@@ -9,7 +9,7 @@ class RecipeIngredient(Base):
     recipe_id = Column(BIGINT, ForeignKey("recipe.recipe_id"), primary_key=True)
     ingredient_id = Column(BIGINT, ForeignKey("ingredient.ingredient_id"), primary_key=True)
 
-    quantity = Column(DECIMAL(6, 2), nullable=False)
+    quantity = Column(DECIMAL(6, 2))
 
     ingredient = relationship("Ingredient", backref="recipe_ingredients")
     recipe = relationship("Recipe", backref="recipe_ingredients")

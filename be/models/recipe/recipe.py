@@ -4,7 +4,6 @@ from db.base import Base
 import enum
 
 class Difficulty(enum.Enum):
-    ANY = "아무나"
     EASY = "초급"
     MEDIUM = "중급"
     HARD = "고급"
