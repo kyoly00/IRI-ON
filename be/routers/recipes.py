@@ -24,5 +24,5 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 # 추천 레시피 조회
 @router.get("/recommendations/{user_id}", response_model=List[RecipeSchema])
 def get_recommended_recipes(user_id: int, db: Session = Depends(get_db)):
-    recommended_recipes = recommend_recipes(user_id, db)
+    recommended_recipes = recommend_recipes(db, user_id=user_id)
     return recommended_recipes
