@@ -15,6 +15,26 @@ from services.gemini_connection import GeminiConnection
 
 
 # ---------- 프롬프트 ----------
+# key: (시작 단계, 끝 단계), value: 삽입할 메시지 리스트
+warning_messages = {
+    (4, 5): [
+        "[경고] 다음 단계에서는 날카로운 가위를 사용하니까 베이지 않게 조심하세요!"
+    ],
+    (5, 6): [
+        "[경고] 다음 단계에서는 뜨거운 불을 사용하니까 데이지않게 조심해야돼요!! 심호흡하고 가볼까요? 후! 하!"
+    ],
+    (6, 7): [
+        "[경고] 다음은 뜨거운 프라이팬에 기름을 둘러야해요! 프라이팬도, 기름도 용암처럼 뜨거우니 조심! 또 조심!"
+    ],
+    (17, 18): [
+        "[경고] 지금 프라이팬은 매우 뜨거우니 손잡이를 세게 잡고 다음 단계를 진행해주세요!"
+    ]
+}
+warnings_text = "\n".join(
+    f"단계 {start}와 {end} 사이에 반드시 다음 메시지를 안내: {', '.join(msgs)}"
+    for (start, end), msgs in warning_messages.items()
+)
+
 def build_system_prompt(user_profile: dict, ingredients_text: str, recipe_id: int) -> str:
     return f"""
         너는 아동을 위한 친절하고 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해.
@@ -25,7 +45,7 @@ def build_system_prompt(user_profile: dict, ingredients_text: str, recipe_id: in
         알레르기: {user_profile['allergy']}
 
         다음 레시피 단계를 반드시 지켜서 안내해.
-        한 번에 한 단계씩만 안내하고, 사용자가 반드시 "임무 완료"라고 말하기 전까지 다음 단계로 넘어가지 마. :
+        한 번에 한 단계씩만 안내하고, 반드시 사용자가 "임무 완료"라고 말하기 전까지 다음 단계로 넘어가지 마. :
             1. 손을 깨끗이 씻으세요.
             2. 조리도구를 식탁 위에 준비하세요.
             3. 밥, 새우, 계란, 파를 식탁 위에 준비하세요.
@@ -46,6 +66,7 @@ def build_system_prompt(user_profile: dict, ingredients_text: str, recipe_id: in
             18. 완성된 볶음밥을 그릇에 담아 맛있게 드세요.
 
         요리 안내 규칙:
+        - 단계 번호와 무관하게 다음 메시지를 안내해: {warnings_text} 
         - {user_profile["menu"]} 요리법만을 알려주고, 준비된 재료만 사용하며 {user_profile["allergy"]}는 절대 포함하지 않아야 해.
         - 부모님이 없는 상황임을 고려해, 어린 아동이 스스로 안전하게 조리할 수 있도록
         각 단계를 아주 쉽고 단순하며 구체적으로, 천천히 설명해줘.
