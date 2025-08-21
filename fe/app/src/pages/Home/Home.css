@@ -3,8 +3,14 @@
   min-height: 100vh;
   background: #fbf7ef;
   padding-bottom: 90px;
-  font-family: 'Jua', sans-serif;
+  font-family: 'omyu_pretty', sans-serif;
+
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+  overflow-y: scroll;         /* 스크롤 유지하되 감춤 */
+
 }
+.home-page::-webkit-scrollbar { display: none; }
 
 /* 상단 바 */
 .home-top {
@@ -112,22 +118,27 @@
 .menu-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr); /* 2열 균등 분할 */
-  gap: 16px;
-  padding: 0 8px;
+  gap: 20px;
+  padding: 0 16px 20px;
   width: 100%; /* 🔥 부모도 가로 다 쓰게 */
   box-sizing: border-box;
+
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
+
+.menu-list::-webkit-scrollbar { display: none; }
 
 /* 메뉴 카드 (자식) */
 .menu-card {
-  width: 100%;  /* 🔥 셀 가득 채우기 */
+  /*width: 100%;  /* 🔥 셀 가득 채우기 */
   display: flex;
   align-items: center;
   gap: 8px;
 
   background: #fff;
   border-radius: 16px;
-  padding: 10px;
+  padding: 12px;
   box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
   transition: transform 0.1s ease;
 }
@@ -155,4 +166,10 @@
 .menu-meta {
   font-size: 11px;
   color: #6b7280;
+}
+
+/* Home.jsx 전용 전체 폰트 강제 */
+.home-page,
+.home-page * {
+  font-family: 'omyu_pretty', sans-serif !important;
 }

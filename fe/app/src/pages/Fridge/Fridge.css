@@ -7,6 +7,8 @@
   overflow-y: auto;             /* 페이지 스크롤 가능 */
   -ms-overflow-style: none;
   scrollbar-width: none;
+  font-size: 20px; /* ✅ 전체 기본 폰트 크기 키움 */
+  font-family: 'omyu_pretty', sans-serif;
 }
 .fridge-page::-webkit-scrollbar { display: none; }
 
@@ -77,9 +79,27 @@
   font-weight: 700;
 }
 .search-box input::placeholder {
-  color: #b7b7b7;
-  font-weight: 500;
+  font-family: 'omyu_pretty', sans-serif !important;
+  font-size: 14px !important;
+  color: #b7b7b7 !important;
+  font-weight: 500 !important;
 }
+
+.search-box input::-webkit-input-placeholder {
+  font-family: 'omyu_pretty', sans-serif !important;
+}
+
+.search-box input::-moz-placeholder {
+  font-family: 'omyu_pretty', sans-serif !important;
+}
+
+.search-box input:-ms-input-placeholder {
+  font-family: 'omyu_pretty', sans-serif !important;
+}
+.search-box input {
+  font-family: 'omyu_pretty', sans-serif !important;
+}
+
 
 /* ===== 본문 영역 ===== */
 .fridge-content {
@@ -168,4 +188,10 @@
   opacity: .5;
   cursor: default;
   box-shadow: none;
+}
+
+button,
+input,
+input::placeholder {
+  font-family: 'omyu_pretty', sans-serif !important;
 }

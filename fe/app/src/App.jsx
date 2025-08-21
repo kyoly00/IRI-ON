@@ -12,6 +12,8 @@ import Welcome1 from "./pages/Welcome/Welcome1.jsx";
 import Welcome2 from "./pages/Welcome/Welcome2.jsx";
 import Community from "./pages/Community/Community.jsx";
 import ProfileModify from "./pages/Profile/Profile_modify.jsx";
+import Personal from "./pages/Community/Personal.jsx";
+
 
 import "./index.css";
 
@@ -33,6 +35,7 @@ export default function App() {
               <Route path="/fridge" element={<Fridge />} />
               <Route path="/community" element={<Community />} />   {/* ✅ 추가 */}
               <Route path="/profile" element={<ProfileModify />} /> {/* ✅ 추가 */}
+              <Route path="/personal" element={<Personal />} />
             </Route>
 
             {/* 하단바 없는 독립 페이지 */}

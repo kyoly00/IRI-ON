@@ -1,0 +1,79 @@
+.personal-page {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  background: #fff7ed;
+  min-height: 100vh;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* 상단바 */
+.personal-top {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff7ed;
+  padding: 12px 14px;
+  z-index: 10;
+}
+.personal-logo { height: 26px; }
+.back-btn {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border: none; border-radius: 10px;
+  background: #fff; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  font-size: 20px;
+}
+
+/* 프로필 카드 */
+.profile-card {
+  background: #fff8ef;
+  margin: 8px 12px 12px;
+  padding: 20px 16px 14px;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.04);
+  text-align: center;
+}
+.profile-avatar {
+  width: 84px; height: 84px; border-radius: 50%;
+  display: block; margin: 0 auto 10px; object-fit: cover;
+  box-shadow: 0 3px 10px rgba(0,0,0,.08);
+}
+.profile-name { font-weight: 700; margin-bottom: 4px; }
+.profile-handle { color: #777; font-size: 14px; margin-bottom: 10px; }
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px; margin-top: 6px;
+}
+.profile-stats div { display: grid; gap: 2px; }
+.profile-stats strong { font-size: 16px; }
+.profile-stats span { font-size: 12px; color: #666; }
+
+/* 사진 3×3 그리드 */
+.photo-grid {
+  padding: 0 12px 100px; /* 하단바 여유 */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.photo-cell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+}
+.photo-cell img {
+  width: 300%;    /* 한 장을 9칸으로 보이게 확대 */
+  height: 300%;
+  object-fit: cover;
+  display: block;
+}
