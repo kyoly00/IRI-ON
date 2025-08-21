@@ -1,42 +1,30 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Mic, StopCircle, Video, Monitor } from 'lucide-react';
-import { FaCog, FaPlay, FaStop } from "react-icons/fa";
-import { base64ToFloat32Array, float32ToPcm16 } from "../../lib/utils";
-import CookingIcon from "../../assets/cookingexplain.png";
+// Home.jsx
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Home.css";
 
-export default function CookingExplain() {
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState(null);
-  const [text, setText] = useState('');
-  const [config, setConfig] = useState({
-  systemPrompt: "You are a friendly Gemini 2.0 model. Respond verbally in a casual, helpful tone.",
-  voice: "Puck",
-  googleSearch: true,
-  allowInterruptions: false
-});
-  const [isConnected, setIsConnected] = useState(false);
-  const wsRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const audioInputRef = useRef(null);
-  const [videoEnabled, setVideoEnabled] = useState(false);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const videoStreamRef = useRef(null);
-  const videoIntervalRef = useRef(null);
-  const [chatMode, setChatMode] = useState(null);
-  const [videoSource, setVideoSource] = useState(null);
+import topLogo from "../../assets/top_logo.png";   // CHEF YUM 로고
+import chef3d from "../../assets/3dLogo.png";     // 셰프 캐릭터
+import { FiSearch, FiHeart, FiBell, FiStar, FiClock } from "react-icons/fi";
 
-  const voices = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
-  let audioBuffer = []
-  let isPlaying = false
+export default function Home() {
+  const nav = useNavigate();
 
-  const startStream = async (mode) => {
-    if (mode !== 'audio') {
-      setChatMode('video');
-    } else {
-      setChatMode('audio');
-    }
+  // ✅ 메뉴를 하드코딩으로 많이 추가
+  const [menus] = useState([
+    { id: 1, name: "토마토 스파게티", time: "30분", thumb: "🍝" },
+    { id: 2, name: "김치찌개", time: "25분", thumb: "🥘" },
+    { id: 3, name: "초밥", time: "20분", thumb: "🍣" },
+    { id: 4, name: "햄버거", time: "15분", thumb: "🍔" },
+    { id: 5, name: "피자", time: "18분", thumb: "🍕" },
+    { id: 6, name: "라면", time: "10분", thumb: "🍜" },
+    { id: 7, name: "샐러드", time: "12분", thumb: "🥗" },
+    { id: 8, name: "스테이크", time: "40분", thumb: "🥩" },
+    { id: 9, name: "타코", time: "22분", thumb: "🌮" },
+    { id: 10, name: "도넛", time: "8분", thumb: "🍩" },
+    { id: 11, name: "케이크", time: "35분", thumb: "🍰" },
+    { id: 12, name: "팬케이크", time: "15분", thumb: "🥞" },
+  ]);
 
     const backendHost = window.location.hostname;
     const wsUrl = `ws://${backendHost}:8000/assistant/ws/cook-assistant/1/1`;
@@ -109,7 +97,6 @@ export default function CookingExplain() {
     wsRef.current.onclose = () => {
       setIsStreaming(false);
     };
-  };
 
   // Initialize audio context and stream
   const startAudioStream = async () => {
@@ -218,166 +205,77 @@ export default function CookingExplain() {
   };
 
   useEffect(() => {
-    if (videoEnabled && videoRef.current) {
-      const startVideo = async () => {
-        try {
-          let stream;
-          if (videoSource === 'camera') {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { width: { ideal: 320 }, height: { ideal: 240 } }
-            });
-          } else if (videoSource === 'screen') {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
-            });
-          }
-          
-          videoRef.current.srcObject = stream;
-          videoStreamRef.current = stream;
-          
-          // Start frame capture after video is playing
-          videoIntervalRef.current = setInterval(() => {
-            captureAndSendFrame();
-          }, 1000);
+    const current = texts[textIdx];
+    let timer;
 
-        } catch (err) {
-          console.error('Video initialization error:', err);
-          setError('Failed to access camera/screen: ' + err.message);
-
-          if (videoSource === 'screen') {
-            // Reset chat mode and clean up any existing connections
-            setChatMode(null);
-            stopStream();
-          }
-
-          setVideoEnabled(false);
-          setVideoSource(null);
-        }
-      };
-
-      startVideo();
-
-      // Cleanup function
-      return () => {
-        if (videoStreamRef.current) {
-          videoStreamRef.current.getTracks().forEach(track => track.stop());
-          videoStreamRef.current = null;
-        }
-        if (videoIntervalRef.current) {
-          clearInterval(videoIntervalRef.current);
-          videoIntervalRef.current = null;
-        }
-      };
+    if (!isDeleting && charIdx <= current.length) {
+      timer = setTimeout(() => {
+        setDisplayText(current.slice(0, charIdx));
+        setCharIdx((c) => c + 1);
+      }, 120);
+    } else if (isDeleting && charIdx >= 0) {
+      timer = setTimeout(() => {
+        setDisplayText(current.slice(0, charIdx));
+        setCharIdx((c) => c - 1);
+      }, 80);
+    } else if (!isDeleting && charIdx > current.length) {
+      timer = setTimeout(() => setIsDeleting(true), 1500);
+    } else if (isDeleting && charIdx < 0) {
+      setIsDeleting(false);
+      setTextIdx((idx) => (idx + 1) % texts.length);
+      setCharIdx(0);
     }
-  }, [videoEnabled, videoSource]);
 
-  // Frame capture function
-  const captureAndSendFrame = () => {
-    if (!canvasRef.current || !videoRef.current || !wsRef.current) return;
-    
-    const context = canvasRef.current.getContext('2d');
-    if (!context) return;
-    
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    
-    context.drawImage(videoRef.current, 0, 0);
-    const base64Image = canvasRef.current.toDataURL('image/jpeg').split(',')[1];
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'image',
-      data: base64Image
-    }));
-  };
-
-  // Toggle video function
-  const toggleVideo = () => {
-    setVideoEnabled(!videoEnabled);
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopStream();
-    };
-  }, []);
+    return () => clearTimeout(timer);
+  }, [charIdx, isDeleting, textIdx, texts]);
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
-      <div className="complete-page">
-        <div className="complete-header">
-          <div className="logo">
-            <span>CHEF</span> YUM
-          </div>
-          <button className="settings-btn">
-            <FaCog />
-          </button>
+    <div className="home-page">
+      {/* 상단바 */}
+      <div className="home-top">
+        <img className="home-logo" src={topLogo} alt="CHEF YUM" />
+        <div className="home-actions">
+          <FiSearch onClick={() => nav("/menu")} />
+          <FiHeart />
+          <FiBell />
         </div>
-        <div className="main-icon-wrapper">
-          <div className="main-icon pulse-glow">
-            <img src={CookingIcon} alt="조리 아이콘" className="cooking-img" />
-          </div>
-        </div>
-        <h2 className="title">조리 과정 설명 중</h2>
       </div>
 
-      <div className="control-buttons">
-        {!isStreaming ? (
-          <>
-            <button className="play-btn" onClick={() => startStream('audio')} disabled={isStreaming}>
-              <FaPlay /> 재생
-            </button>
-            <button className="stop-btn" onClick={stopStream} disabled={!isStreaming}>
-              <FaStop /> 정지
-            </button>
-          </>
-        ) : (
-          <button className="stop-btn" onClick={stopStream}>
-            <FaStop /> 정지
-          </button>
-        )}
+      {/* 히어로 영역 */}
+      <section className="hero">
+        <img className="hero-chef" src={chef3d} alt="셰프 캐릭터" />
+        <div className="hero-ment">
+          {displayText}
+          <span className="cursor">|</span>
+        </div>
+      </section>
+
+      {/* CTA 버튼 */}
+      <button className="cta" onClick={() => nav("/fridge")}>
+         나만의 냉장고 만들기
+      </button>
+
+      {/* 인기 메뉴 */}
+      <section className="popular">
+        <div className="sec-title">
+          <FiStar className="star" />
+          오늘의 인기 메뉴
+        </div>
+
+        {/* 메뉴 카드 */}
+<div className="menu-list">
+  {menus.map((menu) => (
+    <div key={menu.id} className="menu-card">
+      <div className="thumb">{menu.thumb}</div>
+      <div className="menu-name">{menu.name}</div>
+      <div className="menu-meta">
+        <FiClock /> {menu.time}
       </div>
+    </div>
+  ))}
+</div>
 
-      {isStreaming && (
-        <div className="card">
-          <div className="card-content flex items-center justify-center h-24 mt-6">
-            <div className="flex flex-col items-center gap-2">
-              <Mic className="h-8 w-8 text-blue-500 animate-pulse" />
-              <p className="text-gray-600">Listening...</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {chatMode === 'video' && (
-        <div className="card">
-          <div className="card-content pt-6 space-y-4">
-            <h2 className="text-lg font-semibold">Video Input</h2>
-            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                width={320}
-                height={240}
-                className="w-full h-full object-contain"
-                style={{ transform: videoSource === 'camera' ? 'scaleX(-1)' : 'none' }}
-              />
-              <canvas ref={canvasRef} className="hidden" width={640} height={480} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {text && (
-        <div className="card">
-          <div className="card-content pt-6">
-            <h2 className="text-lg font-semibold mb-2">Conversation:</h2>
-            <pre className="whitespace-pre-wrap text-gray-700">{text}</pre>
-          </div>
-        </div>
-      )}
+      </section>
     </div>
   );
-}
+};

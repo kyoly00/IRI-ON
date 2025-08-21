@@ -9,47 +9,70 @@ export default function Welcome2() {
 
   // userId: navigate state 우선 → localStorage 백업
   const userIdFromState = loc.state && loc.state.userId;
-  const [userId, setUserId] = useState(userIdFromState || localStorage.getItem("user_id") || "");
+  const [userId, setUserId] = useState(
+    userIdFromState || localStorage.getItem("user_id") || ""
+  );
 
   useEffect(() => {
-    if (userIdFromState) localStorage.setItem("user_id", String(userIdFromState));
+    if (userIdFromState)
+      localStorage.setItem("user_id", String(userIdFromState));
   }, [userIdFromState]);
 
   // form states
   const [name, setName] = useState("");
+
+  // === UserProfile: 불/칼/가위/필러 사용 여부 ===
   const [tools, setTools] = useState({
     can_use_fire: false,
     can_use_knife: false,
     can_use_scissors: false,
     can_use_peeler: false,
   });
+  const toggleTool = (key) =>
+    setTools((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  // 조리도구(명세 X → UI 전용)
-  const [appliances, setAppliances] = useState(new Set());
+  // === 보유 도구 (API 기반) ===
+  const [toolsList, setToolsList] = useState([]); // DB에서 가져온 도구들
+  const [selectedTools, setSelectedTools] = useState(new Set()); // 사용자가 선택한 도구 id들
 
-  // 알레르기
+  useEffect(() => {
+    const fetchTools = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/tools");
+        if (!res.ok) throw new Error("도구 불러오기 실패");
+        const data = await res.json();
+        setToolsList(data); // [{tool_id:1, name:"에어프라이어"}, ...]
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchTools();
+  }, []);
+
+  const toggleAppliance = (toolId) => {
+    setSelectedTools((prev) => {
+      const n = new Set(prev);
+      n.has(toolId) ? n.delete(toolId) : n.add(toolId);
+      return n;
+    });
+  };
+
+  // === 알레르기 ===
   const allergyOptions = useMemo(
     () => ["우유", "계란", "땅콩", "새우", "밀", "호두", "메밀", "대두", "복숭아"],
     []
   );
   const [allergies, setAllergies] = useState([]);
-
-  const toggleTool = (key) => setTools((prev) => ({ ...prev, [key]: !prev[key] }));
-  const toggleAppliance = (item) =>
-    setAppliances((prev) => {
-      const n = new Set(prev);
-      n.has(item) ? n.delete(item) : n.add(item);
-      return n;
-    });
-
   const addAllergy = (item) => {
     if (!item) return;
     setAllergies((prev) => (prev.includes(item) ? prev : [...prev, item]));
   };
-  const removeAllergy = (item) => setAllergies((prev) => prev.filter((x) => x !== item));
+  const removeAllergy = (item) =>
+    setAllergies((prev) => prev.filter((x) => x !== item));
 
   const goFridge = () => nav("/fridge");
 
+  // === 프로필 + 선택 도구 전송 ===
   const submitProfile = async () => {
     if (!userId) {
       alert("user_id가 없습니다. 로그인부터 진행해주세요.");
@@ -60,28 +83,41 @@ export default function Welcome2() {
       return;
     }
 
-    const payload = {
-      name: name.trim(),
-      ...tools,
-      allergy: allergies.join(","),
-    };
-
     try {
-      const res = await fetch(`http://127.0.0.1:8000/users/profile?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // 1. 프로필 저장
+      const profilePayload = {
+        name: name.trim(),
+        ...tools,
+        allergy: allergies.join(","),
+      };
 
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || "프로필 생성 실패");
-      }
+      const res1 = await fetch(
+        `http://127.0.0.1:8000/users/profile?user_id=${userId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(profilePayload),
+        }
+      );
+      if (!res1.ok) throw new Error("프로필 생성 실패");
+
+      // 2. 선택 도구 저장 (List[ToolIDSchema]로 맞춰서)
+      const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
+
+      const res2 = await fetch(
+        `http://127.0.0.1:8000/users/tools?user_id=${userId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toolPayload),
+        }
+      );
+      if (!res2.ok) throw new Error("도구 저장 실패");
 
       nav("/home");
     } catch (e) {
       console.error(e);
-      alert("프로필 생성 중 오류가 발생했습니다.");
+      alert("프로필/도구 저장 중 오류 발생: " + e.message);
     }
   };
 
@@ -89,7 +125,11 @@ export default function Welcome2() {
     <div className="w2-page">
       <header className="w2-header">
         <h1>요리 프로필 생성하기</h1>
-        <p>더 자세히 알려주시면 가볍고 안전하고<br />최고의 맞춤 메뉴를 추천해 드릴게요!</p>
+        <p>
+          더 자세히 알려주시면 가볍고 안전하고
+          <br />
+          최고의 맞춤 메뉴를 추천해 드릴게요!
+        </p>
       </header>
 
       <section className="w2-hero">
@@ -103,11 +143,11 @@ export default function Welcome2() {
         />
       </section>
 
+      {/* === 안전성 도구 (불/칼/가위/필러) === */}
       <section className="w2-card">
         <div className="w2-card-title">
           <span className="w2-emoji">🛡️</span> 아래의 도구를 안전하게 사용할 수 있나요?
         </div>
-
         <div className="w2-grid-2">
           <button
             className={`w2-tool ${tools.can_use_fire ? "active" : ""}`}
@@ -151,17 +191,20 @@ export default function Welcome2() {
         </div>
       </section>
 
+      {/* === 보유 도구 (API 기반) === */}
       <section className="w2-card">
         <div className="w2-card-title">어떤 조리도구를 가지고 있나요?</div>
         <div className="w2-grid-3">
-          {["전자레인지", "에어프라이어", "오븐", "전기밥솥", "믹서기", "그릴"].map((a) => (
+          {toolsList.map((tool) => (
             <button
-              key={a}
+              key={tool.tool_id}
               type="button"
-              className={`w2-appliance ${appliances.has(a) ? "selected" : ""}`}
-              onClick={() => toggleAppliance(a)}
+              className={`w2-appliance ${
+                selectedTools.has(tool.tool_id) ? "selected" : ""
+              }`}
+              onClick={() => toggleAppliance(tool.tool_id)}
             >
-              {a}
+              {tool.name}
             </button>
           ))}
         </div>
@@ -171,8 +214,11 @@ export default function Welcome2() {
         </button>
       </section>
 
+      {/* === 알레르기 === */}
       <section className="w2-card">
-        <div className="w2-card-title"><span className="w2-emoji">⚠️</span> 피해야 할 음식이 있나요?</div>
+        <div className="w2-card-title">
+          <span className="w2-emoji">⚠️</span> 피해야 할 음식이 있나요?
+        </div>
 
         <div className="w2-select-row">
           <select
@@ -183,9 +229,13 @@ export default function Welcome2() {
               e.target.value = "";
             }}
           >
-            <option value="" disabled>알레르기 음식을 선택하세요</option>
+            <option value="" disabled>
+              알레르기 음식을 선택하세요
+            </option>
             {allergyOptions.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </select>
         </div>
