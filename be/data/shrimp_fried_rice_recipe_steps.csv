@@ -1,19 +1,19 @@
-recipe_id,step,url
-42,1,https://youtu.be/x-J0U3svqZU
-42,2,https://youtu.be/cwIo1ieglgo
-42,3,https://youtu.be/odD06ItB7Rk
-42,4,https://youtu.be/jNH9IzAgnwU
-42,5,https://youtu.be/aUSBS7VdfXk
-42,6,https://youtu.be/ahPBHBw62vo
-42,7,https://youtu.be/AhfnZKMuZzM
-42,8,https://youtu.be/4ih3XWJOJ4o
-42,9,https://youtu.be/UhX3TCmqPUU
-42,10,https://youtu.be/8QCO6QuQH74
-42,11,https://youtu.be/jd6PlSQ5jSo
-42,12,https://youtu.be/ZEn_zPYsiSU
-42,13,https://youtu.be/jBQ-4fFq9XI
-42,14,https://youtu.be/ZugD66Ga2pw
-42,15,https://youtu.be/XXZWKvkm6Jw
-42,16,https://youtu.be/QtIVWAqpe6Y
-42,17,https://youtu.be/xJSoEW3iKHI
-42,18,https://youtu.be/Hn4NRKE-ppI
+step,text,url,recipe_id
+1,"손을 깨끗이 씻으세요.",https://youtu.be/x-J0U3svqZU,42
+2,"조리도구를 식탁 위에 준비하세요.",https://youtu.be/cwIo1ieglgo,42
+3,"밥, 새우, 계란, 파를 식탁 위에 준비하세요.",https://youtu.be/odD06ItB7Rk,42
+4,"굴소스, 소금, 후추를 식탁 위에 준비하세요.",https://youtu.be/jNH9IzAgnwU,42
+5,파를 잘게 썰어 준비하세요.,https://youtu.be/aUSBS7VdfXk,42
+6,"가스레인지 불을 켜고 프라이팬을 화구 틀에 잘 맞게 올리세요.",https://youtu.be/ahPBHBw62vo,42
+7,"프라이팬에 기름을 한바퀴 반 두르세요.",https://youtu.be/AhfnZKMuZzM,42
+8,"파를 넣고 색이 노릇해질때까지 볶으세요.",https://youtu.be/4ih3XWJOJ4o,42
+9,"새우를 넣으세요.",https://youtu.be/UhX3TCmqPUU,42
+10,"계란을 넣으세요.",https://youtu.be/8QCO6QuQH74,42
+11,"밥을 넣으세요.",https://youtu.be/jd6PlSQ5jSo,42
+12,"주걱을 들지 않은 손은 프라이팬의 손잡이를 단단하게 잡고, 주걱을 든 손으로 골고루 볶으세요. 이때, 주걱을 밥 밑으로 깊게 넣어 왼쪽 오른쪽으로 뒤집으면 잘 볶아집니다.",https://youtu.be/3BMkcroT1Kg,42
+13,"굴소스를 한 숟가락 넣으세요.",https://youtu.be/jBQ-4fFq9XI,42
+14,"소금을 두번에서 세번정도 톡톡 뿌리세요.",https://youtu.be/ZugD66Ga2pw,42
+15,"후추를 취향에따라 두번에서 세 번 뿌리세요.",https://youtu.be/XXZWKvkm6Jw,42
+16,"마지막으로 골고루 볶으세요.",https://youtu.be/RbCpZU89eM8,42
+17,"가스레인지 불을 끕니다.",https://youtu.be/xJSoEW3iKHI,42
+18,"완성된 볶음밥을 그릇에 담아 맛있게 드세요.",https://youtu.be/Hn4NRKE-ppI,42
