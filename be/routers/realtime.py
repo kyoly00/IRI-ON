@@ -92,7 +92,7 @@ async def cook_assistant_ws(
     # Gemini Live API 설정을 위한 딕셔너리 생성
     gemini_config = {
         "system_prompt": system_prompt_text,
-        "voice": "Orus",  # 사용할 Gemini 음성 모델 이름 (유효한 모델명인지 확인 필요)
+        "voice": "kore",  # 사용할 Gemini 음성 모델 이름 (유효한 모델명인지 확인 필요)
         "google_search": True,  # Google Search 도구 사용 여부
         "allow_interruptions": True  # Gemini가 말하는 중 사용자 개입 허용 여부
     }
@@ -243,15 +243,11 @@ async def cook_assistant_ws(
 
                     # Gemini 응답 음성 처리
                     if audio_array is not None:
-                        # PCM numpy array → base64 인코딩 후 전송
-                        import base64
+                        # PCM numpy array → bytes 변환
                         audio_bytes = audio_array.tobytes()
-                        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
-                        await websocket.send_json({
-                            "type": "audio",
-                            "data": audio_base64
-                        })
+                        # 바이너리 데이터 직접 전송
+                        await websocket.send_bytes(audio_bytes)
 
                     # 턴이 끝났다는 신호
                     if msg.get("turn_complete", False):
