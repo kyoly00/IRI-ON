@@ -18,37 +18,39 @@ from services.gemini_connection import GeminiConnection
 def build_system_prompt(user_profile: dict, ingredients_text: str, recipe_id: int) -> str:
     return f"""
         너는 아동을 위한 친절하고 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해.
-        사용자는 칼 사용은 "{user_profile['knife_skill']}", 불 사용은 "{user_profile['stove_skill']}" 수준이고,
+        사용자는 칼 사용은 "{user_profile['knife_skill']}", 불 사용은 "{user_profile['stove_skill']}", 필러(껍질 벗기는 칼) 사용은 "{user_profile['peeler_skill']}", 가위 사용은 "{user_profile['scissors_skill']}" 수준이고,
         안전을 항상 잘 지키도록 자주 상기시켜야 해.
 
         사용할 재료: {ingredients_text}
         알레르기: {user_profile['allergy']}
 
-        다음 레시피 단계를 반드시 지켜서 안내해:
-            1. 손을 깨끗이 씻습니다.
-            2. 조리도구를 식탁 위에 준비합니다.
-            3. 밥, 새우, 계란, 파를 식탁 위에 준비합니다.
-            4. 굴소스, 소금, 후추를 식탁 위에 준비합니다.
-            5. 파를 잘게 썰어 준비합니다.
-            6. 가스레인지 불을 켜고 프라이팬을 올립니다.
-            7. 프라이팬에 기름을 두릅니다.
-            8. 파를 넣고 볶아 향을 냅니다.
-            9. 새우를 넣고 색이 변할 때까지 볶습니다.
-            10. 계란을 넣고 스크램블합니다.
-            11. 밥을 넣고 골고루 섞으며 볶습니다.
-            12. 주걱으로 밥을 눌러가며 고슬하게 볶습니다.
-            13. 굴소스를 넣고 볶습니다.
-            14. 소금을 조금 넣고 볶습니다.
-            15. 후추를 두 번 뿌리고 볶습니다.
-            16. 가스레인지 불을 끕니다.
-            17. 완성된 볶음밥을 그릇에 담아 마무리합니다.
+        다음 레시피 단계를 반드시 지켜서 안내해.
+        한 번에 한 단계씩만 안내하고, 사용자가 반드시 "임무 완료"라고 말하기 전까지 다음 단계로 넘어가지 마. :
+            1. 손을 깨끗이 씻으세요.
+            2. 조리도구를 식탁 위에 준비하세요.
+            3. 밥, 새우, 계란, 파를 식탁 위에 준비하세요.
+            4. 굴소스, 소금, 후추를 식탁 위에 준비하세요.
+            5. 파를 잘게 썰어 준비하세요.
+            6. 가스레인지 불을 켜고 프라이팬을 화구 틀에 잘 맞게 올리세요.
+            7. 프라이팬에 기름을 한바퀴 반 두르세요.
+            8. 파를 넣고 색이 노릇해질때까지 볶으세요.
+            9. 새우를 넣으세요.
+            10. 계란을 넣으세요.
+            11. 밥을 넣으세요.
+            12. 주걱을 들지 않은 손은 프라이팬의 손잡이를 단단하게 잡고, 주걱을 든 손으로 골고루 볶으세요. 이때, 주걱을 밥 밑으로 깊게 넣어 왼쪽 오른쪽으로 뒤집으면 잘 볶아집니다.
+            13. 굴소스를 한 숟가락 넣으세요.
+            14. 소금을 두번에서 세번정도 톡톡 뿌리세요.
+            15. 후추를 취향에따라 두번에서 세 번 뿌리세요.
+            16. 마지막으로 골고루 볶으세요.
+            17. 가스레인지 불을 끕니다.
+            18. 완성된 볶음밥을 그릇에 담아 맛있게 드세요.
 
         요리 안내 규칙:
         - {user_profile["menu"]} 요리법만을 알려주고, 준비된 재료만 사용하며 {user_profile["allergy"]}는 절대 포함하지 않아야 해.
         - 부모님이 없는 상황임을 고려해, 어린 아동이 스스로 안전하게 조리할 수 있도록
         각 단계를 아주 쉽고 단순하며 구체적으로, 천천히 설명해줘.
         - 각 단계에서 사용하는 조리기구와 위험 요소에 대해 반드시 안전 주의 문구를 포함해야 해.
-        - 한 번에 한 단계씩만 안내하고, 사용자가 반드시 "다 했어"라고 말하기 전까지 다음 단계로 넘어가지 마.
+        - 한 번에 한 단계씩만 안내하고, 사용자가 반드시 "임무 완료"라고 말하기 전까지 다음 단계로 넘어가지 마.
         - 어려워하거나 모른다고 하면 더 쉽게 다시 설명해줘.
         - 항상 사용자를 응원하고 격려하는 말을 잊지 마.
         - 모든 답변은 최대 50자 이내로 간결하게 작성해줘.
@@ -81,6 +83,8 @@ async def cook_assistant_ws(
     user_profile = {
         "knife_skill": "사용 가능" if getattr(profile, "can_use_knife", False) else "서툼",
         "stove_skill": "사용 가능" if getattr(profile, "can_use_fire", False) else "서툼",
+        "scissors_skill": "사용 가능" if getattr(profile, "can_use_scissors", False) else "서툼",
+        "peeler_skill": "사용 가능" if getattr(profile, "can_use_peeler", False) else "서툼",
         "allergy": getattr(profile, "allergy", "") or "없음",
         "menu": getattr(recipe, "name", "요리"),
     }
@@ -102,8 +106,12 @@ async def cook_assistant_ws(
     try:
         # Create new Gemini connection for this client
         gemini = GeminiConnection()
-        connections[user_id] = gemini
-        
+        connections[user_id] = {
+            "gemini": gemini,
+            "current_step": 1,  # 처음 시작은 step 1
+            "speech_buffer": ""
+        }
+
         # Wait for initial configuration
         config_data = gemini_config
 
@@ -230,7 +238,11 @@ async def cook_assistant_ws(
                             "type": "input_text",
                             "data": input_text
                         })
-                        print(f"Received input transcription: {input_text}")
+                        # print(f"Received input transcription: {input_text}")
+
+                        # ✅ 조각을 버퍼에 쌓음
+                        connections[user_id]["speech_buffer"] += input_text
+                        # print(f"Received input transcription: {connections[user_id]["speech_buffer"]}")
 
                     # 출력 텍스트 전송 (Gemini 응답)
                     if output_texts:
@@ -240,6 +252,38 @@ async def cook_assistant_ws(
                             "data": full_output_text
                         })
                         print(f"Received output transcription: {full_output_text}")
+
+                        # ✅ 누적된 발화를 하나로 합치기
+                        full_user_utterance = connections[user_id]["speech_buffer"]
+                        print(f"Full user utterance: {full_user_utterance}")
+
+                        if full_user_utterance:
+                            # ✅ 완료 키워드 체크
+                            normalized = full_user_utterance
+                            completion_keywords = ["임무 완료"]
+                            print(f"✅ Current Step {connections[user_id]["current_step"]}")
+                            if any(keyword in normalized for keyword in completion_keywords):
+                                connections[user_id]["current_step"] += 1
+                                print(f"✅ Step advanced to {connections[user_id]["current_step"]}")
+
+                                # DB에서 step 영상 조회
+                                step_video = recipe_crud.get_step_video(db, recipe_id, connections[user_id]["current_step"])
+                                if step_video and step_video.url:
+                                    await websocket.send_json({
+                                        "type": "video",
+                                        "step": connections[user_id]["current_step"],
+                                        "data": step_video.url
+                                    })
+                                else:
+                                    await websocket.send_json({
+                                        "type": "video",
+                                        "step": connections[user_id]["current_step"],
+                                        "data": ""
+                                    })
+                                    print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
+
+                        # 다음 턴을 위해 버퍼 초기화
+                        connections[user_id]["speech_buffer"] = ""
 
                     # Gemini 응답 음성 처리
                     if audio_array is not None:
@@ -272,5 +316,5 @@ async def cook_assistant_ws(
     finally:
         # Cleanup
         if user_id in connections:
-            await connections[user_id].close()
+            await connections[user_id]['gemini'].close()
             del connections[user_id]
