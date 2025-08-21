@@ -199,7 +199,7 @@
 /* 하단 버튼 */
 .menu-page .bottom-btn-wrapper {
   position: fixed;                /* 전역 fixed지만 클래스 스코프라 영향 없음 */
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px)); /* 하단바 여유 */
+  bottom: calc(120px + env(safe-area-inset-bottom, 0px)); /* 하단바 여유 */
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;

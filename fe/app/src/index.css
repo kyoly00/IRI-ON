@@ -32,3 +32,22 @@ html, body, #root {
   padding: 0;   /* 상 16 / 좌우 0 / 하단(네비 70 + 여유 16) */
   box-sizing: border-box;
 }
+
+/* 혜란 글씨체 추가*/
+
+@font-face {
+    font-family: 'omyu_pretty';
+    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+/* 전체 기본 폰트 적용 */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'omyu_pretty', sans-serif;
+}
+
+button {
+  font-family: 'omyu_pretty', sans-serif;
+}

@@ -1,8 +1,149 @@
-.community-page {
+/* 전체 래퍼 (배경, 중앙정렬) */
+.cm-wrap {
+  min-height: 100vh;
+  background: #fbf7ef;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 40px;
+  font-family: 'Pretendard', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+}
+
+/* 상단바 */
+.cm-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  width: 100%;
+  max-width: 500px;
+  background: #fbf7ef;
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-size: 24px;
-  font-weight: bold;
+  justify-content: space-between;
+  padding: 14px 16px 6px;
+}
+
+.cm-logo {
+  height: 38px;
+  object-fit: contain;
+}
+
+.cm-actions {
+  display: flex;
+  gap: 14px;
+  font-size: 22px;
+  color: #121213;
+}
+
+/* 피드 */
+.cm-feed {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px 12px 80px;
+}
+
+/* 카드 */
+.post-card {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 6px 24px rgba(235, 135, 78, 0.16);
+  overflow: hidden;
+}
+
+/* 헤더(프로필) */
+.post-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 8px;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.meta .name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #222;
+}
+.meta .time {
+  font-size: 12px;
+  color: #808080;
+  margin-top: 2px;
+}
+
+/* 사진 */
+.post-photo img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 320px;
+}
+
+/* 액션 버튼 */
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 0;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  color: #555;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.05s ease;
+}
+.icon-btn:hover { background: #f3f3f3; }
+.icon-btn:active { transform: translateY(1px); }
+.icon-btn span { font-size: 13px; color: #777; }
+
+.icon-btn.liked { color: #ff5a5a; }
+
+.post-actions .spacer {
+  flex: 1;
+}
+
+/* 태그 */
+.post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+.tag {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f4f4f4;
+  color: #444;
+  font-weight: 600;
+}
+.tag-1 { background: #fff2e0; color: #c9741a; }  /* 주황 */
+.tag-2 { background: #e6ffef; color: #1e9a57; }  /* 초록 */
+.tag-3 { background: #e9edff; color: #4856d1; }  /* 파랑 */
+.tag-4 { background: #ffe9f2; color: #c74b86; }  /* 핑크 */
+.tag-5 { background: #e8f9ff; color: #1a8aa7; }  /* 하늘 */
+
+/* 본문 */
+.post-text {
+  padding: 8px 12px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #333;
+  word-break: keep-all;
 }

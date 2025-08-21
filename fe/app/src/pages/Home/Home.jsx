@@ -26,183 +26,15 @@ export default function Home() {
     { id: 12, name: "팬케이크", time: "15분", thumb: "🥞" },
   ]);
 
-    const backendHost = window.location.hostname;
-    const wsUrl = `ws://${backendHost}:8000/assistant/ws/cook-assistant/1/1`;
-
-    wsRef.current = new WebSocket(wsUrl);
-
-    wsRef.current.onopen = async () => {
-      wsRef.current.send(JSON.stringify({
-        type: 'config',
-        config: config
-      }));
-      
-      await startAudioStream();
-
-      if (mode !== 'audio') {
-        setVideoEnabled(true);
-        setVideoSource(mode);
-      }
-
-      setIsStreaming(true);
-      setIsConnected(true);
-    };
-
-    wsRef.current.onmessage = async (event) => {
-      // 1. 바이너리(오디오) 데이터 처리
-      if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
-        let arrayBuffer;
-        if (event.data instanceof Blob) {
-          arrayBuffer = await event.data.arrayBuffer();
-        } else {
-          arrayBuffer = event.data;
-        }
-
-        // Float32Array 또는 Int16Array 등 AudioBuffer에 넣을 수 있는 형식으로 변환 필요!
-        // 예: 16bit PCM → Int16Array → Float32Array로 변환
-        const int16arr = new Int16Array(arrayBuffer);
-        const floatArr = new Float32Array(int16arr.length);
-        for (let i = 0; i < int16arr.length; i++) {
-          floatArr[i] = int16arr[i] / 32768; // Float32 정규화(-1~1)
-        }
-
-        playAudioData(floatArr); // 기존 함수 호환
-        return;
-      }
-
-      // 2. 텍스트(json) 데이터는 원래 방식대로 파싱
-      let response;
-      try {
-        response = JSON.parse(event.data);
-      } catch (e) {
-        console.error('Failed to parse JSON:', e);
-        return;
-      }
-
-      if (response.type === 'output_text') {
-        setText(prev => prev + response.data + '\n');
-      } else if (response.type === 'input_text') {
-        console.log('Input transcription:', response.data);
-      } else if (response.type === 'turn_complete') {
-        console.log('Turn complete signal received');
-      }
-    };
-
-
-    wsRef.current.onerror = (error) => {
-      setError('WebSocket error: ' + error.message);
-      setIsStreaming(false);
-    };
-
-    wsRef.current.onclose = () => {
-      setIsStreaming(false);
-    };
-
-  // Initialize audio context and stream
-  const startAudioStream = async () => {
-    try {
-      // Initialize audio context
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000 // Required by Gemini
-      });
-
-      // Get microphone stream
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Create audio input node
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(512, 1, 1);
-      
-      processor.onaudioprocess = (e) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          const inputData = e.inputBuffer.getChannelData(0);
-          const pcmData = float32ToPcm16(inputData);
-          // Convert to base64 and send as binary
-          const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
-          wsRef.current.send(JSON.stringify({
-            type: 'audio',
-            data: base64Data
-          }));
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
-      
-      audioInputRef.current = { source, processor, stream };
-      setIsStreaming(true);
-    } catch (err) {
-      setError('Failed to access microphone: ' + err.message);
-    }
-  };
-
-  // Stop streaming
-  const stopStream = () => {
-    if (audioInputRef.current) {
-      const { source, processor, stream } = audioInputRef.current;
-      source.disconnect();
-      processor.disconnect();
-      stream.getTracks().forEach(track => track.stop());
-      audioInputRef.current = null;
-    }
-
-    if (chatMode === 'video') {
-      setVideoEnabled(false);
-      setVideoSource(null);
-
-      if (videoStreamRef.current) {
-        videoStreamRef.current.getTracks().forEach(track => track.stop());
-        videoStreamRef.current = null;
-      }
-      if (videoIntervalRef.current) {
-        clearInterval(videoIntervalRef.current);
-        videoIntervalRef.current = null;
-      }
-    }
-
-    // stop ongoing audio playback
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-
-    setIsStreaming(false);
-    setIsConnected(false);
-    setChatMode(null);
-  };
-
-  const playAudioData = async (audioData) => {
-    audioBuffer.push(audioData);
-    if (!isPlaying) {
-      playNextInQueue(); // Start playback if not already playing
-    }
-  };
-
-  const playNextInQueue = async () => {
-    if (!audioContextRef.current || audioBuffer.length === 0) {
-      isPlaying = false;
-      return;
-    }
-
-    isPlaying = true;
-    const audioData = audioBuffer.shift();
-
-    const buffer = audioContextRef.current.createBuffer(1, audioData.length, 24000);
-    buffer.copyToChannel(audioData, 0);
-
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContextRef.current.destination);
-    source.onended = () => {
-      playNextInQueue();
-    };
-    source.start();
-  };
+  // ✅ 타이핑 효과용 멘트들
+  const texts = [
+    "안녕! \n나는 AI 요리선생님\n셰프얌이야.",
+    "나만의 냉장고를 만들고\n맞춤 메뉴를 추천받아보자!\n\n오늘은 무엇을 먹을까? 🤔"
+  ];
+  const [displayText, setDisplayText] = useState("");
+  const [textIdx, setTextIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const current = texts[textIdx];
@@ -278,4 +110,4 @@ export default function Home() {
       </section>
     </div>
   );
-};
+}
