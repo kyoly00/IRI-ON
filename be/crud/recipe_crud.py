@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from models.recipe.recipe import Recipe
 from models.recipe.recipe_ingredient import RecipeIngredient
 from models.recipe.recipe_tool import RecipeTool
+from models.recipe.recipe_step import RecipeStep
 from schemas.ingredient_id_schema import IngredientIDSchema
 from schemas.tool_id_schema import ToolIDSchema
 from schemas.recipe_schema import RecipeSchema
@@ -57,3 +58,10 @@ def get_recommended_recipes(db: Session, ingredients: List[IngredientIDSchema], 
 
 def get_tool_ids_by_recipe(db: Session, recipe_id: int) -> List[ToolIDSchema]:
     return db.query(RecipeTool.tool_id).filter(RecipeTool.recipe_id == recipe_id).all()
+
+def get_step_video(db: Session, recipe_id: int, step: int):
+    return (
+        db.query(RecipeStep)
+        .filter(RecipeStep.recipe_id == recipe_id, RecipeStep.step == step)
+        .first()
+    )
