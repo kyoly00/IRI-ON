@@ -61,20 +61,45 @@ export default function CookingExplain() {
     };
 
     wsRef.current.onmessage = async (event) => {
-      const response = JSON.parse(event.data);
-      if (response.type === 'audio') {
-        const audioData = base64ToFloat32Array(response.data);
-        playAudioData(audioData);
-      } else if (response.type === 'output_text') {
-        // output_text 타입 처리: Gemini에서 보낸 완성된 텍스트
+      // 1. 바이너리(오디오) 데이터 처리
+      if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
+        let arrayBuffer;
+        if (event.data instanceof Blob) {
+          arrayBuffer = await event.data.arrayBuffer();
+        } else {
+          arrayBuffer = event.data;
+        }
+
+        // Float32Array 또는 Int16Array 등 AudioBuffer에 넣을 수 있는 형식으로 변환 필요!
+        // 예: 16bit PCM → Int16Array → Float32Array로 변환
+        const int16arr = new Int16Array(arrayBuffer);
+        const floatArr = new Float32Array(int16arr.length);
+        for (let i = 0; i < int16arr.length; i++) {
+          floatArr[i] = int16arr[i] / 32768; // Float32 정규화(-1~1)
+        }
+
+        playAudioData(floatArr); // 기존 함수 호환
+        return;
+      }
+
+      // 2. 텍스트(json) 데이터는 원래 방식대로 파싱
+      let response;
+      try {
+        response = JSON.parse(event.data);
+      } catch (e) {
+        console.error('Failed to parse JSON:', e);
+        return;
+      }
+
+      if (response.type === 'output_text') {
         setText(prev => prev + response.data + '\n');
       } else if (response.type === 'input_text') {
-        // 필요하면 input_text도 처리 가능
         console.log('Input transcription:', response.data);
       } else if (response.type === 'turn_complete') {
         console.log('Turn complete signal received');
       }
     };
+
 
     wsRef.current.onerror = (error) => {
       setError('WebSocket error: ' + error.message);

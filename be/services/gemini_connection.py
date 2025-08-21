@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 import os
 
 from websockets import connect
-from concurrent.futures import CancelledError
-
-from services.voice_activity_detector import VoiceActivityDetector
 
 load_dotenv()
 
@@ -42,10 +39,11 @@ class GeminiConnection:
                 "generation_config": {
                     "response_modalities": ["AUDIO"],  
                     "speech_config": {
+                        # "language_code": "ko-KR",
                         "voice_config": {
                             "prebuilt_voice_config": {
                                 "voice_name": self.config["voice"]
-                            }
+                            },
                         }
                     }
                 },
@@ -86,7 +84,7 @@ class GeminiConnection:
         output_transcriptions = []
         responses = []
 
-        async for raw_response in self.ws:   # <- self.ws 로 고침
+        async for raw_response in self.ws:   
             response = json.loads(raw_response.decode())
             server_content = response.pop("serverContent", None)
             if server_content is None:
@@ -104,7 +102,7 @@ class GeminiConnection:
             if model_turn is not None:
                 for part in model_turn.get("parts", []):
                     pcm_data = base64.b64decode(part["inlineData"]["data"])
-                    responses.append(np.frombuffer(pcm_data, dtype=np.int16))
+                    responses.append(np.frombuffer(pcm_data, dtype=np.int32))
 
             if server_content.get("turnComplete"):
                 break
