@@ -13,14 +13,15 @@ export default function Menu() {
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
 
-  // ✅ 메뉴 불러오기 (백엔드 연동 유지)
+  // ✅ 메뉴 불러오기
   const fetchMenus = async (mode, search = "", category = "전체") => {
     try {
       let url = "";
       if (mode === "전체") {
         url = "http://localhost:8000/recipes/";
       } else {
-        const userId = 1; // TODO: 로그인 user_id로 교체
+        // TODO: 로그인 후 실제 user_id로 교체
+        const userId = localStorage.getItem("user_id") || 1;
         url = `http://localhost:8000/recipes/recommendations/${userId}`;
       }
 
@@ -37,6 +38,7 @@ export default function Menu() {
     }
   };
 
+  // 처음 전체 메뉴 불러오기
   useEffect(() => {
     fetchMenus("전체");
   }, []);
@@ -47,14 +49,14 @@ export default function Menu() {
     fetchMenus(mode, searchTerm, selectedCategory);
   };
 
-  // ✅ 검색창 입력
+  // ✅ 검색 이벤트
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
     fetchMenus(viewMode, value, selectedCategory);
   };
 
-  // ✅ 카테고리 변경
+  // ✅ 카테고리 선택
   const handleCategoryChange = (cat) => {
     setSelectedCategory(cat);
     fetchMenus(viewMode, searchTerm, cat);
@@ -71,7 +73,6 @@ export default function Menu() {
 
   return (
     <div className="menu-page">
-      {/* 제목 */}
       <h2 className="title">오늘의 메뉴를 선택하세요 !</h2>
 
       {/* 보기 모드 버튼 */}
@@ -91,61 +92,58 @@ export default function Menu() {
       </div>
 
       {/* 검색창 */}
-<div className="search-bar">
-  <FaSearch className="search-icon" />
-  <input
-    type="text"
-    placeholder="메뉴를 검색하세요."
-    value={searchTerm}
-    onChange={handleSearchChange}
-  />
-</div>
+      <div className="search-bar">
+        <FaSearch className="search-icon" />
+        <input
+          type="text"
+          placeholder="메뉴를 검색하세요."
+          value={searchTerm}
+          onChange={handleSearchChange}
+        />
+      </div>
 
-{/* 카테고리 */}
-<div className="category-bar">
-  {categories.map((cat) => (
-    <button
-      key={cat}
-      className={`category-btn ${selectedCategory === cat ? "active" : ""}`}
-      onClick={() => handleCategoryChange(cat)}
-    >
-      {cat}
-    </button>
-  ))}
-</div>
-
+      {/* 카테고리 */}
+      <div className="category-bar">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            className={`category-btn ${selectedCategory === cat ? "active" : ""}`}
+            onClick={() => handleCategoryChange(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
       {/* 메뉴 리스트 */}
-<div className="menu-list">
-  {menuList.map((menu) => (
-    <div
-      key={menu.recipe_id}
-      className={`menu-card ${selectedId === menu.recipe_id ? "selected" : ""}`}
-      onClick={() => setSelectedId(menu.recipe_id)}
-    >
-      <img src={menu.image_url} alt={menu.name} className="menu-img" />
-      <div className="menu-info">
-        <span className="menu-name">{menu.name}</span>
-        <div className="menu-meta">
-          <div className="menu-time">
-            <FaClock /> {menu.time}분
-          </div>
-          {viewMode === "맞춤형" && (
-            <div className="menu-difficulty">
-              난이도: {menu.difficulty}
+      <div className="menu-list">
+        {menuList.map((menu) => (
+          <div
+            key={menu.recipe_id}
+            className={`menu-card ${selectedId === menu.recipe_id ? "selected" : ""}`}
+            onClick={() => setSelectedId(menu.recipe_id)}
+          >
+            <img src={menu.image_url} alt={menu.name} className="menu-img" />
+            <div className="menu-info">
+              <span className="menu-name">{menu.name}</span>
+              <div className="menu-meta">
+                <div className="menu-time">
+                  <FaClock /> {menu.time}분
+                </div>
+                {/* 맞춤형 모드에서만 난이도 표시 */}
+                {viewMode === "맞춤형" && (
+                  <div className="menu-difficulty">난이도: {menu.difficulty}</div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        ))}
       </div>
-    </div>
-  ))}
-</div>
-
 
       {/* 하단 버튼 */}
       <div className="bottom-btn-wrapper">
         <button className="start-btn" onClick={handleStartCooking}>
-          요리시작하기
+          요리 시작하기
         </button>
       </div>
     </div>
