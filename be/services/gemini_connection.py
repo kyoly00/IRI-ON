@@ -14,7 +14,7 @@ load_dotenv()
 class GeminiConnection:
     def __init__(self, config=None):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model = "gemini-2.0-flash-exp"
+        self.model = "gemini-live-2.5-flash-preview"
         self.uri = (
             "wss://generativelanguage.googleapis.com/ws/"
             "google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
@@ -22,7 +22,7 @@ class GeminiConnection:
         )
         self.ws = None
         self.config = config or {
-            "system_prompt": "You are a friendly Gemini 2.0 model. Respond verbally in a casual, helpful tone.",
+            "system_prompt": "너는 아동을 위한 친절하고 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해.",
             "voice": "Puck",
             "google_search": True
         }
@@ -39,7 +39,7 @@ class GeminiConnection:
                 "generation_config": {
                     "response_modalities": ["AUDIO"],  
                     "speech_config": {
-                        # "language_code": "ko-KR",
+                        "language_code": "ko-KR",
                         "voice_config": {
                             "prebuilt_voice_config": {
                                 "voice_name": self.config["voice"]
