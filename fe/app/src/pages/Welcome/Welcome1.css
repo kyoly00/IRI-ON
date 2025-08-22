@@ -1,11 +1,13 @@
 /* 화면 전체 레이아웃 */
 .welcome1-page {
-  min-height: 100%;
-  padding: 28px 20px 40px;
-  background: #fff7ee; /* 밝은 크림톤 */
+  min-height: 100vh;
+  background: #fff7ee;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;   /* 위 기준 */
+  padding-top: 20vh;             /* 화면 높이의 20% 만큼 아래에서 시작 */
+  box-sizing: border-box;
 }
 
 /* 로고 */

@@ -7,6 +7,20 @@
   align-items: center;
   padding-bottom: 40px;
   font-family: 'Pretendard', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+   overflow-x: hidden;        /* 가로 스크롤 제거 */
+  overflow-y: auto;          /* 세로 스크롤은 유지 */
+
+  -ms-overflow-style: none;  /* IE, Edge에서 스크롤바 숨김 */
+  scrollbar-width: none;     /* Firefox에서 스크롤바 숨김 */
+  -webkit-overflow-scrolling: touch;
+  font-family: 'omyu_pretty', sans-serif;
+
+}
+
+.cm-wrap::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  background: transparent;   /* 완전 숨김 */
 }
 
 /* 상단바 */
@@ -38,19 +52,27 @@
 /* 피드 */
 .cm-feed {
   width: 100%;
-  max-width: 500px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 1px;
   padding: 10px 12px 80px;
+
+    
+  overflow: visible;     /* 스크롤 유지 */
+
 }
+
+.cm-feed::-webkit-scrollbar { display: none; }
 
 /* 카드 */
 .post-card {
   background: #fff;
-  border-radius: 18px;
+  border-radius: 20px;
   box-shadow: 0 6px 24px rgba(235, 135, 78, 0.16);
   overflow: hidden;
+  transform: scale(0.95);
+
 }
 
 /* 헤더(프로필) */
@@ -58,7 +80,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px 8px;
+  padding: 10px 12px 6px;
 }
 
 .avatar {
@@ -84,7 +106,7 @@
   width: 100%;
   display: block;
   object-fit: cover;
-  max-height: 320px;
+  max-height: 260px;
 }
 
 /* 액션 버튼 */
