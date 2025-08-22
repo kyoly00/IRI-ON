@@ -24,15 +24,28 @@ export default function Fridge() {
     return `${mm}.${dd} ${wd}`;
   }, []);
 
-  // 백엔드 연동
+  // 재료 목록 불러오기
   useEffect(() => {
     const ac = new AbortController();
+
     (async () => {
       try {
         setLoading(true);
         setErrMsg("");
-        const res = await fetch(`${API_BASE}/ingredients/`, { signal: ac.signal });
+
+        const userId = localStorage.getItem("user_id");
+        if (!userId) {
+          setErrMsg("로그인이 필요합니다. 다시 로그인해주세요.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/ingredients?user_id=${userId}`, {
+          signal: ac.signal,
+        });
+
         if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+
         const data = await res.json();
         setIngredients(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -44,24 +57,56 @@ export default function Fridge() {
         setLoading(false);
       }
     })();
+
     return () => ac.abort();
   }, []);
 
   // 선택 토글
   const toggleSelect = (id) => {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
-  // 생성하기 버튼
-  const goToComplete = () => {
-    navigate("/fridgeComplete", { state: { selected } });
+  // 선택한 재료 DB 저장 + 다음 화면 이동
+  const goToComplete = async () => {
+    const userId = localStorage.getItem("user_id");
+    if (!userId) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    if (selected.length === 0) {
+      alert("재료를 하나 이상 선택하세요.");
+      return;
+    }
+
+    try {
+      // ✅ 선택한 재료 payload
+      const payload = selected.map((id) => ({ ingredient_id: id }));
+
+      const res = await fetch(`${API_BASE}/users/ingredients?user_id=${userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("재료 저장 실패");
+      console.log("✅ 재료 저장 성공");
+
+      navigate("/fridgeComplete", { state: { selected } });
+    } catch (err) {
+      console.error("❌ 재료 저장 중 오류:", err);
+      alert("재료 저장에 실패했습니다.");
+    }
   };
 
   // 검색 필터 (공백/대소문자 무시)
   const filteredIngredients = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return ingredients;
-    return ingredients.filter((item) => String(item.name).toLowerCase().includes(q));
+    return ingredients.filter((item) =>
+      String(item.name).toLowerCase().includes(q)
+    );
   }, [ingredients, searchTerm]);
 
   return (
@@ -135,8 +180,6 @@ export default function Fridge() {
           생성하기{selected.length > 0 ? ` (${selected.length})` : ""}
         </button>
       </footer>
-
-      {/* ⛔️ 페이지 내부 bottom-nav는 제거 (MainLayout에서 렌더링되도록) */}
     </div>
   );
 }

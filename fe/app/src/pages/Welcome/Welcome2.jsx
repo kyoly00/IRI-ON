@@ -7,15 +7,18 @@ export default function Welcome2() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  // userId: navigate state 우선 → localStorage 백업
-  const userIdFromState = loc.state && loc.state.userId;
+  // ✅ userId 가져오기 (state > localStorage > "")
+  const userIdFromState = loc.state?.userId || null;
   const [userId, setUserId] = useState(
     userIdFromState || localStorage.getItem("user_id") || ""
   );
 
+  // ✅ state로 받은 경우 localStorage 갱신
   useEffect(() => {
-    if (userIdFromState)
+    if (userIdFromState) {
       localStorage.setItem("user_id", String(userIdFromState));
+      setUserId(String(userIdFromState));
+    }
   }, [userIdFromState]);
 
   // form states
@@ -32,8 +35,8 @@ export default function Welcome2() {
     setTools((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // === 보유 도구 (API 기반) ===
-  const [toolsList, setToolsList] = useState([]); // DB에서 가져온 도구들
-  const [selectedTools, setSelectedTools] = useState(new Set()); // 사용자가 선택한 도구 id들
+  const [toolsList, setToolsList] = useState([]); 
+  const [selectedTools, setSelectedTools] = useState(new Set());
 
   useEffect(() => {
     const fetchTools = async () => {
@@ -101,7 +104,7 @@ export default function Welcome2() {
       );
       if (!res1.ok) throw new Error("프로필 생성 실패");
 
-      // 2. 선택 도구 저장 (List[ToolIDSchema]로 맞춰서)
+      // 2. 선택 도구 저장
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
 
       const res2 = await fetch(
@@ -143,7 +146,7 @@ export default function Welcome2() {
         />
       </section>
 
-      {/* === 안전성 도구 (불/칼/가위/필러) === */}
+      {/* === 안전성 도구 === */}
       <section className="w2-card">
         <div className="w2-card-title">
           <span className="w2-emoji">🛡️</span> 아래의 도구를 안전하게 사용할 수 있나요?
@@ -191,7 +194,7 @@ export default function Welcome2() {
         </div>
       </section>
 
-      {/* === 보유 도구 (API 기반) === */}
+      {/* === 보유 도구 === */}
       <section className="w2-card">
         <div className="w2-card-title">어떤 조리도구를 가지고 있나요?</div>
         <div className="w2-grid-3">
