@@ -1,4 +1,3 @@
-
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
@@ -14,6 +13,8 @@ import Community from "./pages/Community/Community.jsx";
 import ProfileModify from "./pages/Profile/Profile_modify.jsx";
 import Personal from "./pages/Community/Personal.jsx";
 
+// ✅ 새로 추가
+import CleanupExplain from "./pages/CleanupExplain/CleanupExplain.jsx";
 
 import "./index.css";
 
@@ -33,17 +34,22 @@ export default function App() {
               <Route path="/home" element={<Home />} />
               <Route path="/menu" element={<Menu />} />
               <Route path="/fridge" element={<Fridge />} />
-              <Route path="/community" element={<Community />} />   {/* ✅ 추가 */}
-              <Route path="/profile" element={<ProfileModify />} /> {/* ✅ 추가 */}
+              <Route path="/community" element={<Community />} />
+              <Route path="/profile" element={<ProfileModify />} />
               <Route path="/personal" element={<Personal />} />
             </Route>
 
             {/* 하단바 없는 독립 페이지 */}
             <Route path="/fridgecomplete" element={<FridgeComplete />} />
             <Route path="/CookingExplain/:id" element={<CookingExplain />} />
+            {/* ✅ 여기 추가 */}
+            <Route path="/cleanup" element={<CleanupExplain />} />
 
             {/* 잘못된 경로 처리 */}
             <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 필요하면 홈으로 돌리고 싶다면 ↓로 바꿔도 됨
+                <Route path="*" element={<Navigate to="/home" replace />} />
+            */}
           </Routes>
         </div>
       </div>

@@ -1,65 +1,20 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ 라우팅용
-import YouTube from "react-youtube";
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaPlay, FaStop } from "react-icons/fa";
 import topLogo from "../../assets/top_logo.png";
 import { float32ToPcm16 } from "../../lib/utils";
-import "./CookingExplain.css";
+import "./CleanupExplain.css";
 
-/* ===== 1) 단계별 유튜브 하드코딩 목록 ===== */
-const steps = [
-  { step: 1, url: "https://youtu.be/x-J0U3svqZU" },
-  { step: 2, url: "https://youtu.be/cwIo1ieglgo" },
-  { step: 3, url: "https://youtu.be/odD06ItB7Rk" },
-  { step: 4, url: "https://youtu.be/jNH9IzAgnwU" },
-  { step: 5, url: "https://youtu.be/aUSBS7VdfXk" },
-  { step: 6, url: "https://youtu.be/ahPBHBw62vo" },
-  { step: 7, url: "https://youtu.be/AhfnZKMuZzM" },
-  { step: 8, url: "https://youtu.be/4ih3XWJOJ4o" },
-  { step: 9, url: "https://youtu.be/UhX3TCmqPUU" },
-  { step: 10, url: "https://youtu.be/8QCO6QuQH74" },
-  { step: 11, url: "https://youtu.be/jd6PlSQ5jSo" },
-  { step: 12, url: "https://youtu.be/3BMkcroT1Kg" },
-  { step: 13, url: "https://youtu.be/jBQ-4fFq9XI" },
-  { step: 14, url: "https://youtu.be/ZugD66Ga2pw" },
-  { step: 15, url: "https://youtu.be/XXZWKvkm6Jw" },
-  { step: 16, url: "https://youtu.be/RbCpZU89eM8" },
-  { step: 17, url: "https://youtu.be/xJSoEW3iKHI" },
-  { step: 18, url: "https://youtu.be/Hn4NRKE-ppI" },
-];
-
-/* 유튜브 ID 추출 */
-const getVideoId = (url) => {
-  try {
-    const u = new URL((url || "").trim());
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
-    return u.searchParams.get("v") || "";
-  } catch {
-    return "";
-  }
-};
-
-export default function CookingExplain() {
-  // ✅ 라우터 훅 & 이동 함수
+export default function CleanupExplain() {
   const nav = useNavigate();
-  const goCleanup = () => nav("/cleanup"); // 필요 시 경로를 원하는 값으로 바꿔줘
 
-  /* ===== 2) 영상 상태 ===== */
-  const [currentStep, setCurrentStep] = useState(0);
-  const [blocked, setBlocked] = useState(new Set());
-  const playerRef = useRef(null);
-
-  const { videoId, link } = useMemo(() => {
-    const url = steps[currentStep].url;
-    return { videoId: getVideoId(url), link: url };
-  }, [currentStep]);
-
-  /* ===== 3) 음성/WS 상태 ===== */
+  /* ===== 상태 ===== */
   const [isStreaming, setIsStreaming] = useState(false);
   const [connStatus, setConnStatus] = useState("disconnected");
   const [currentMsg, setCurrentMsg] = useState({ role: "", text: "" });
   const [prevMsg, setPrevMsg] = useState({ role: "", text: "" });
 
+  /* ===== 오디오/소켓 레퍼런스 ===== */
   const wsRef = useRef(null);
   const micCtxRef = useRef(null);
   const micChainRef = useRef(null);
@@ -67,45 +22,13 @@ export default function CookingExplain() {
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
 
-  /* ===== 4) 유튜브 옵션 ===== */
-  const ytOpts = {
-    width: "100%",
-    height: "315",
-    host: "https://www.youtube.com",
-    playerVars: { autoplay: 1, controls: 1, mute: 1, playsinline: 1 },
-  };
+  /* ===== WebSocket URL (필요 시 수정) ===== */
+  const WS_URL = "ws://192.168.35.9:8000/assistant/ws/cleanup-assistant/2/42";
 
-  const onReady = (e) => {
-    playerRef.current = e.target;
-    try {
-      e.target.playVideo();
-    } catch {}
-  };
-
-  const onError = (e) => {
-    const code = e.data;
-    if (code === 101 || code === 150) {
-      setBlocked((prev) => new Set(prev).add(currentStep));
-      const next = findNextPlayable(currentStep);
-      if (next !== currentStep) setCurrentStep(next);
-    }
-  };
-
-  const findNextPlayable = (startIdx) => {
-    for (let i = startIdx + 1; i < steps.length; i++) {
-      if (!blocked.has(i)) return i;
-    }
-    return startIdx;
-  };
-
-  const handlePrev = () => setCurrentStep((s) => Math.max(s - 1, 0));
-  const handleNext = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
-
-  /* ===== 5) WebSocket ===== */
-  const WS_URL = "ws://192.168.35.9:8000/assistant/ws/cook-assistant/2/42";
-
+  /* ===== 스트리밍 시작/중지 ===== */
   const startStream = async () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+
     setConnStatus("connecting");
     wsRef.current = new WebSocket(WS_URL);
 
@@ -114,10 +37,14 @@ export default function CookingExplain() {
       await startMicCapture();
       await ensurePlaybackCtx();
       setIsStreaming(true);
+        // ✅ 연결 직후 서버에 초기 메시지(config) 전송
+    wsRef.current.send(
+        JSON.stringify({ type: "config", data: { init: true } })
+        );
     };
 
     wsRef.current.onmessage = async (event) => {
-      // 오디오 응답
+      // 오디오 바이너리
       if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
         let arrayBuffer;
         if (event.data instanceof Blob) arrayBuffer = await event.data.arrayBuffer();
@@ -130,7 +57,7 @@ export default function CookingExplain() {
         return;
       }
 
-      // JSON 메시지
+      // 텍스트 JSON
       let msg;
       try {
         msg = JSON.parse(event.data);
@@ -138,27 +65,11 @@ export default function CookingExplain() {
         return;
       }
 
-      if (msg?.type === "video") {
-        const n = Math.max(1, Math.min(steps.length, Number(msg.step) || 1));
-        const fromUrl =
-          typeof msg.data === "string" && msg.data
-            ? steps.findIndex(
-                (s) =>
-                  s.url.replace(/\/$/, "") === msg.data.trim().replace(/\/$/, "")
-              )
-            : -1;
-        const idx = fromUrl >= 0 ? fromUrl : n - 1;
-        setCurrentStep(idx);
-        return;
-      }
-
-      // 대화 메시지
       const pushMsg = (role, text) => {
         if (!text) return;
         setPrevMsg((prev) => (currentMsg.text ? currentMsg : prev));
         setCurrentMsg({ role, text });
       };
-
       if (msg?.type === "input_text") pushMsg("stt", msg.data);
       if (msg?.type === "output_text") pushMsg("ai", msg.data);
     };
@@ -178,14 +89,12 @@ export default function CookingExplain() {
 
   const stopStream = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.close();
-      } catch {}
+      try { wsRef.current.close(); } catch {}
     }
     setIsStreaming(false);
   };
 
-  /* ===== 6) 마이크 캡처 ===== */
+  /* ===== 마이크 캡처 ===== */
   const startMicCapture = async () => {
     if (micCtxRef.current) return;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -219,14 +128,12 @@ export default function CookingExplain() {
       micChainRef.current = null;
     }
     if (micCtxRef.current) {
-      try {
-        micCtxRef.current.close();
-      } catch {}
+      try { micCtxRef.current.close(); } catch {}
       micCtxRef.current = null;
     }
   };
 
-  /* ===== 7) 서버 음성 응답 재생 큐 ===== */
+  /* ===== 서버 음성 재생 ===== */
   const ensurePlaybackCtx = async () => {
     if (playbackCtxRef.current) return;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -235,9 +142,7 @@ export default function CookingExplain() {
 
   const closePlaybackCtx = () => {
     if (playbackCtxRef.current) {
-      try {
-        playbackCtxRef.current.close();
-      } catch {}
+      try { playbackCtxRef.current.close(); } catch {}
       playbackCtxRef.current = null;
     }
     audioQueueRef.current = [];
@@ -264,61 +169,30 @@ export default function CookingExplain() {
     src.buffer = buffer;
     src.connect(playbackCtxRef.current.destination);
     src.onended = () => playNextFromQueue();
-    try {
-      src.start();
-    } catch {
-      isPlayingRef.current = false;
-    }
+    try { src.start(); } catch { isPlayingRef.current = false; }
   };
 
-  /* ===== 8) 언마운트 시 정리 ===== */
+  /* ===== 언마운트 정리 ===== */
   useEffect(() => {
     return () => {
       stopMicCapture();
       closePlaybackCtx();
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try {
-          wsRef.current.close();
-        } catch {}
+        try { wsRef.current.close(); } catch {}
       }
     };
   }, []);
 
-  /* ===== 9) UI ===== */
   return (
-    <div className="complete-page">
-      <div className="complete-header">
+    <div className="cleanup-page">
+      <div className="cleanup-header">
         <img src={topLogo} className="logo" alt="CHEF YUM" />
       </div>
 
-      {/* 유튜브 영상 */}
-      <div className="cooking-video">
-        <YouTube
-          key={videoId}
-          videoId={videoId}
-          opts={ytOpts}
-          onReady={onReady}
-          onError={onError}
-        />
-      </div>
-
-      {/* 임베딩 금지 안내 */}
-      {blocked.has(currentStep) && (
-        <div className="yt-fallback">
-          이 영상은 소유자 설정으로 앱에서 재생할 수 없어요.{" "}
-          <a href={link} target="_blank" rel="noreferrer">
-            유튜브에서 보기
-          </a>
-        </div>
-      )}
-
-      {/* 영상 제어 */}
-      <div className="cooking-controls">
-        <button onClick={handlePrev}>← 이전</button>
-        <button onClick={() => playerRef.current?.playVideo()}>▶ 재생</button>
-        <button onClick={() => playerRef.current?.pauseVideo()}>⏸ 멈춤</button>
-        <button onClick={handleNext}>다음 →</button>
-      </div>
+      <h1 className="cleanup-title">남은 재료 보관법 & 분리배출 도우미</h1>
+      <p className="cleanup-desc">
+        마이크로 질문하면 음성으로 안내해 드릴게요. (예: “대파는 어떻게 보관해?”)
+      </p>
 
       {/* 음성 제어 */}
       <div className="control-buttons">
@@ -332,12 +206,7 @@ export default function CookingExplain() {
           </button>
         )}
         <span className="conn-status">
-          상태:{" "}
-          {connStatus === "connected"
-            ? "연결됨"
-            : connStatus === "connecting"
-            ? "연결 중…"
-            : "끊김"}
+          상태: {connStatus === "connected" ? "연결됨" : connStatus === "connecting" ? "연결 중…" : "끊김"}
         </span>
       </div>
 
@@ -348,17 +217,13 @@ export default function CookingExplain() {
           <div className="msg-stage">
             {prevMsg.text && (
               <div className={`msg-prev ${prevMsg.role}`}>
-                <span className="bullet">
-                  {prevMsg.role === "ai" ? "🤖" : "👂"}
-                </span>
+                <span className="bullet">{prevMsg.role === "ai" ? "🤖" : "👂"}</span>
                 <span className="text">{prevMsg.text}</span>
               </div>
             )}
             {currentMsg.text && (
               <div className={`msg-current ${currentMsg.role}`}>
-                <span className="bullet">
-                  {currentMsg.role === "ai" ? "🤖" : "👂"}
-                </span>
+                <span className="bullet">{currentMsg.role === "ai" ? "🤖" : "👂"}</span>
                 <span className="text">{currentMsg.text}</span>
               </div>
             )}
@@ -366,17 +231,10 @@ export default function CookingExplain() {
         </div>
       )}
 
-      {/* ✅ 하단 텍스트 버튼: CleanupExplain으로 이동 */}
-      <div className="cleanup-row">
-        <button
-          type="button"
-          className="cleanup-link"
-          onClick={goCleanup}
-          aria-label="남은 재료 보관법 및 분리배출 보러가기"
-        >
-          남은 재료 보관법 및 분리배출 보러가기 →
-        </button>
+      <div className="bottom-actions">
+        <button className="text-link" onClick={() => nav(-1)}>← 요리 화면으로 돌아가기</button>
       </div>
     </div>
   );
 }
+''
