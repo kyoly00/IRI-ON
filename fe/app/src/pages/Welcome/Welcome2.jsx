@@ -35,13 +35,13 @@ export default function Welcome2() {
     setTools((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // === 보유 도구 (API 기반) ===
-  const [toolsList, setToolsList] = useState([]); 
+  const [toolsList, setToolsList] = useState([]);
   const [selectedTools, setSelectedTools] = useState(new Set());
 
   useEffect(() => {
     const fetchTools = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/tools");
+        const res = await fetch("http://192.168.35.9:8000/tools");
         if (!res.ok) throw new Error("도구 불러오기 실패");
         const data = await res.json();
         setToolsList(data); // [{tool_id:1, name:"에어프라이어"}, ...]
@@ -87,7 +87,7 @@ export default function Welcome2() {
     }
 
     try {
-      // 1. 프로필 저장
+      // 1) 프로필 저장
       const profilePayload = {
         name: name.trim(),
         ...tools,
@@ -95,7 +95,7 @@ export default function Welcome2() {
       };
 
       const res1 = await fetch(
-        `http://127.0.0.1:8000/users/profile?user_id=${userId}`,
+        `http://192.168.35.9:8000/users/profile?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -104,11 +104,11 @@ export default function Welcome2() {
       );
       if (!res1.ok) throw new Error("프로필 생성 실패");
 
-      // 2. 선택 도구 저장
+      // 2) 선택 도구 저장
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
 
       const res2 = await fetch(
-        `http://127.0.0.1:8000/users/tools?user_id=${userId}`,
+        `http://192.168.35.9:8000/users/tools?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -256,6 +256,9 @@ export default function Welcome2() {
         <button className="w2-submit" type="button" onClick={submitProfile}>
           생성하기
         </button>
+
+        {/* ▼ 하단 제스처바/네비바에 가리지 않게 스페이서 */}
+        <div className="w2-safe-bottom" aria-hidden />
       </section>
     </div>
   );
