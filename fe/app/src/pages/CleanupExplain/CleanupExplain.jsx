@@ -4,6 +4,7 @@ import { FaPlay, FaStop } from "react-icons/fa";
 import topLogo from "../../assets/top_logo.png";
 import { float32ToPcm16 } from "../../lib/utils";
 import "./CleanupExplain.css";
+import config from "../../config.js"
 
 export default function CleanupExplain() {
   const nav = useNavigate();
@@ -24,7 +25,7 @@ export default function CleanupExplain() {
   const isPlayingRef = useRef(false);
 
   /* ===== WebSocket URL (필요 시 수정) ===== */
-  const WS_URL = "ws://localhost:8000/assistant/ws/cleanup-assistant/2/42";
+  const WS_URL = `${config.WS_BASE}/assistant/ws/cleanup-assistant/2/42`;
 
   /* ===== 스트리밍 시작/중지 ===== */
   const startStream = async () => {
