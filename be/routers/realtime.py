@@ -47,15 +47,14 @@ timer_text = "\n".join(
     for step, time in timer_steps.items()
 )
 
-def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: str, recipe_id: int) -> str:
-    return f"""
+BASE_PROMPT = """
         너는 아동을 위한 친절한 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
-        사용자는 칼 사용은 "{user_profile['knife_skill']}", 불 사용은 "{user_profile['stove_skill']}", 필러(껍질 벗기는 칼) 사용은 "{user_profile['peeler_skill']}", 가위 사용은 "{user_profile['scissors_skill']}" 수준이고,
+        사용자는 칼 사용은 "{knife_skill}", 불 사용은 "{stove_skill}", 필러(껍질 벗기는 칼) 사용은 "{peeler_skill}", 가위 사용은 "{scissors_skill}" 수준이고,
         안전을 항상 잘 지키도록 자주 상기시켜야 해.
 
         사용할 재료: {ingredients_text}
         사용할 조리도구: {tools_text}
-        알레르기: {user_profile['allergy']}
+        알레르기: {allergy}
 
         ### 핵심 규칙 (반드시 지킬 것)
         1. **한 번에 한 단계씩만 안내하며, 단계 번호를 함께 알려준다.**
@@ -92,6 +91,19 @@ def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: s
         - 항상 사용자를 응원하고 격려하는 말을 잊지 마.
         - 모든 답변은 최대 100자 이내로 간결하게 작성하고 이모티콘은 절대로 쓰지 말고 글자만 출력해.
         """
+
+def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: str) -> str:
+    return BASE_PROMPT.format(
+        knife_skill=user_profile["knife_skill"],
+        stove_skill=user_profile["stove_skill"],
+        peeler_skill=user_profile["peeler_skill"],
+        scissors_skill=user_profile["scissors_skill"],
+        allergy=user_profile["allergy"],
+        ingredients_text=ingredients_text,
+        tools_text=tools_text,
+        warnings_text=warnings_text,
+        timer_text=timer_text
+    )
 
 def initial_greeting(menu: str) -> str:
     return f"""안녕, 너는 나의 요리를 도와주는 셰프얌이야. 같이 새우볶음밥을 만드는 걸 도와줘야 해.
@@ -131,7 +143,7 @@ async def cook_assistant_ws(
     ingredients_text = getattr(recipe, "materials", "") or ""
     tools_text = getattr(recipe, "tools", "") or ""
     # 시스템 프롬프트 생성
-    system_prompt_text = build_system_prompt(user_profile, ingredients_text, tools_text, recipe_id)
+    system_prompt_text = build_system_prompt(user_profile, ingredients_text, tools_text)
     
     # --- GeminiConnection 초기화 및 시작 ---
     # Gemini Live API 설정을 위한 딕셔너리 생성
@@ -277,6 +289,15 @@ async def cook_assistant_ws(
                         await websocket.send_bytes(audio_array.tobytes())
                         await websocket.send_json({"type": "audio_end", "id": audio_id})
 
+                    # if audio_array is not None:
+                    #     connections[user_id]["current_audio_id"] += 1
+                    #     audio_id = connections[user_id]["current_audio_id"]
+                    #     await websocket.send_json({"type": "audio_start", "id": audio_id})
+                    #     # chunk 단위로 바로 전송
+                    #     for chunk in audio_array:
+                    #         await websocket.send_bytes(chunk.tobytes())
+                    #     await websocket.send_json({"type": "audio_end", "id": audio_id})
+
                     # 턴 완료 시
                     if msg.get("turn_complete", False):
                         # 남은 버퍼 전송
@@ -287,21 +308,22 @@ async def cook_assistant_ws(
 
                     # 단계 인식 및 동영상 전송
                     full_output_text = "".join(output_texts)  # 모든 토큰 합치기
-                    if "단계" in full_output_text:
-                            # '숫자 + 단계' 패턴 찾기
-                            match = re.search(r"(\d+)\s*단계", full_output_text)
-                            if match:
-                                cur_step = int(match.group(1))  # 단계 숫자 추출
-                                connections[user_id]["current_step"] = cur_step
-                                print(f"✅ Step set to {connections[user_id]['current_step']}")
-                            asyncio.create_task(find_video())
-                            # 타이머 기능
-                            if cur_step in timer_steps.keys():
-                                asyncio.create_task(run_timer(timer_steps[cur_step]))
+                    asyncio.create_task(process_step_detection(full_output_text, user_id))
 
                 except Exception as e:
                     print(f"Gemini receive error: {e}")
-                    await asyncio.sleep(0.05)
+                    continue
+
+        async def process_step_detection(full_output_text, user_id):
+            if "단계" in full_output_text:
+                match = re.search(r"(\d+)\s*단계", full_output_text)
+                if match:
+                    cur_step = int(match.group(1))
+                    connections[user_id]["current_step"] = cur_step
+                    print(f"✅ Step set to {connections[user_id]['current_step']}")
+                    asyncio.create_task(find_video())
+                if cur_step in timer_steps:
+                    asyncio.create_task(run_timer(user_id, timer_steps[cur_step]))
 
         # 두 태스크(concurrent 실행)
         async with asyncio.TaskGroup() as tg:
