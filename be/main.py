@@ -18,7 +18,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://192.168.68.77:5173",  # 이 부분을 추가하세요.
+    "http://192.168.0.11:8000",  # 이 부분을 추가하세요.
 ]
 
 # ✅ CORS 허용 (개발용)

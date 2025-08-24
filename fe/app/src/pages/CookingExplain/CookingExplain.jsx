@@ -102,7 +102,7 @@ export default function CookingExplain() {
   const handleNext = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
 
   /* ===== 5) WebSocket ===== */
-  const WS_URL = "ws://192.168.35.9:8000/assistant/ws/cook-assistant/2/42";
+  const WS_URL = "ws://192.168.0.11:8000/assistant/ws/cook-assistant/2/42";
 
   const startStream = async () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
