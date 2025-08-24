@@ -64,6 +64,7 @@ export default function CookingExplain() {
   const micCtxRef = useRef(null);
   const micChainRef = useRef(null);
   const playbackCtxRef = useRef(null);
+  const playbackSrcRef = useRef(null);
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
 
@@ -102,7 +103,7 @@ export default function CookingExplain() {
   const handleNext = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
 
   /* ===== 5) WebSocket ===== */
-  const WS_URL = "ws://192.168.0.11:8000/assistant/ws/cook-assistant/2/42";
+  const WS_URL = "ws://localhost:8000/assistant/ws/cook-assistant/2/42";
 
   const startStream = async () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -114,7 +115,11 @@ export default function CookingExplain() {
       await startMicCapture();
       await ensurePlaybackCtx();
       setIsStreaming(true);
+    wsRef.current.send(
+        JSON.stringify({ type: "config", data: { init: true } })
+        );
     };
+
 
     wsRef.current.onmessage = async (event) => {
       // 오디오 응답
@@ -150,6 +155,15 @@ export default function CookingExplain() {
         const idx = fromUrl >= 0 ? fromUrl : n - 1;
         setCurrentStep(idx);
         return;
+      }
+      
+      if (msg.type === "audio_start") {
+        // 새 오디오가 들어올 거라는 신호
+        audioQueueRef.current = [];
+        if (playbackSrcRef.current) {
+          try { playbackSrcRef.current.stop(); } catch {}
+        }
+        return; // audio_start 이벤트는 오디오 재생 준비용이므로 더 처리할 필요 없음
       }
 
       // 대화 메시지
@@ -219,9 +233,7 @@ export default function CookingExplain() {
       micChainRef.current = null;
     }
     if (micCtxRef.current) {
-      try {
-        micCtxRef.current.close();
-      } catch {}
+      try { micCtxRef.current.close(); } catch {}
       micCtxRef.current = null;
     }
   };
@@ -263,12 +275,9 @@ export default function CookingExplain() {
     const src = playbackCtxRef.current.createBufferSource();
     src.buffer = buffer;
     src.connect(playbackCtxRef.current.destination);
+    playbackSrcRef.current = src; // 저장
     src.onended = () => playNextFromQueue();
-    try {
-      src.start();
-    } catch {
-      isPlayingRef.current = false;
-    }
+    src.start();
   };
 
   /* ===== 8) 언마운트 시 정리 ===== */

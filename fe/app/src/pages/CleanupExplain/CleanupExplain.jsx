@@ -19,11 +19,12 @@ export default function CleanupExplain() {
   const micCtxRef = useRef(null);
   const micChainRef = useRef(null);
   const playbackCtxRef = useRef(null);
+  const playbackSrcRef = useRef(null);
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
 
   /* ===== WebSocket URL (필요 시 수정) ===== */
-  const WS_URL = "ws://192.168.0.11:8000/assistant/ws/cleanup-assistant/2/42";
+  const WS_URL = "ws://localhost:8000/assistant/ws/cleanup-assistant/2/42";
 
   /* ===== 스트리밍 시작/중지 ===== */
   const startStream = async () => {
@@ -63,6 +64,15 @@ export default function CleanupExplain() {
         msg = JSON.parse(event.data);
       } catch {
         return;
+      }
+
+      if (msg.type === "audio_start") {
+        // 새 오디오가 들어올 거라는 신호
+        audioQueueRef.current = [];
+        if (playbackSrcRef.current) {
+          try { playbackSrcRef.current.stop(); } catch {}
+        }
+        return; // audio_start 이벤트는 오디오 재생 준비용이므로 더 처리할 필요 없음
       }
 
       const pushMsg = (role, text) => {
@@ -159,17 +169,19 @@ export default function CleanupExplain() {
       isPlayingRef.current = false;
       return;
     }
-    isPlayingRef.current = true;
 
+    isPlayingRef.current = true;
     const data = audioQueueRef.current.shift();
+
     const buffer = playbackCtxRef.current.createBuffer(1, data.length, 24000);
     buffer.copyToChannel(data, 0);
 
     const src = playbackCtxRef.current.createBufferSource();
     src.buffer = buffer;
     src.connect(playbackCtxRef.current.destination);
+    playbackSrcRef.current = src; // 저장
     src.onended = () => playNextFromQueue();
-    try { src.start(); } catch { isPlayingRef.current = false; }
+    src.start();
   };
 
   /* ===== 언마운트 정리 ===== */
@@ -237,4 +249,3 @@ export default function CleanupExplain() {
     </div>
   );
 }
-''
