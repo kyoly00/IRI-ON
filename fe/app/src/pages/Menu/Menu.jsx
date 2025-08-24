@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Menu.css";
 import { FaSearch, FaClock } from "react-icons/fa";
+import config from "../../config.js";
+
+const API_BASE = `${config.API_BASE}`;
 
 const categories = ["전체", "한식", "중식", "일식", "양식", "간편식", "기타"];
 
@@ -18,7 +21,7 @@ export default function Menu() {
     try {
       let url = "";
       if (mode === "전체") {
-        url = "http://localhost:8000/recipes/";
+        url = API_BASE + "/recipes/";
       } else {
         // TODO: 로그인 후 실제 user_id로 교체
         const userId = localStorage.getItem("user_id") || 1;

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaEnvelope, FaLock } from "react-icons/fa";
 import "./Welcome1.css";
 import topLogo from "../../assets/top_logo.png";
+import config from "../../config.js"
 
 export default function Welcome1() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function Welcome1() {
 
   setSubmitting(true);
   try {
-    const res = await fetch("http://127.0.0.1:8000/users/signUp", {
+    const res = await fetch(`${config.API_BASE}/users/signUp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, password }),
