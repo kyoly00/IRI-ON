@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import "./Fridge.css";
 import { useNavigate } from "react-router-dom";
 import { FaSearch, FaClock } from "react-icons/fa";
+import config from "../../config.js";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = `${config.API_BASE}`;
 
 export default function Fridge() {
   const [ingredients, setIngredients] = useState([]);

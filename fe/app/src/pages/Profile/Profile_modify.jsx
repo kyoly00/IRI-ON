@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Profile_modify.css";
 import baby from "../../assets/baby.png";
+import config from "../../config.js"
 
 // 레벨 이미지
 import Lv1 from "../../assets/Level/Lv1.png";
@@ -104,12 +105,12 @@ export default function ProfileModify() {
   useEffect(() => {
     const load = async () => {
       try {
-        const resTools = await fetch("http://127.0.0.1:8000/tools");
+        const resTools = await fetch(`${config.API_BASE}/tools`);
         if (resTools.ok) setToolsList(await resTools.json());
 
         if (userId) {
           const resProfile = await fetch(
-            `http://127.0.0.1:8000/users/profile?user_id=${userId}`
+            `${config.API_BASE}/users/profile?user_id=${userId}`
           );
           if (resProfile.ok) {
             const p = await resProfile.json();
@@ -128,7 +129,7 @@ export default function ProfileModify() {
           }
 
           const resMyTools = await fetch(
-            `http://127.0.0.1:8000/users/tools?user_id=${userId}`
+            `${config.API_BASE}/users/tools?user_id=${userId}`
           );
           if (resMyTools.ok) {
             const my = await resMyTools.json();
@@ -159,7 +160,7 @@ export default function ProfileModify() {
         allergy: allergies.join(","),
       };
       const res1 = await fetch(
-        `http://127.0.0.1:8000/users/profile?user_id=${userId}`,
+        `${config.API_BASE}/users/profile?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -170,7 +171,7 @@ export default function ProfileModify() {
 
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
       const res2 = await fetch(
-        `http://127.0.0.1:8000/users/tools?user_id=${userId}`,
+        `${config.API_BASE}/users/tools?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
