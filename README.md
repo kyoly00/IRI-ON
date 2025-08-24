@@ -27,11 +27,22 @@ ipconfig
 3. `be/main.py` 파일에서 허용할 주소를 추가:
 
 ```python
-# 예: ALLOWED_HOSTS = ["<IPv4주소>:5173"]
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.0.11:8000",
+    # 이 부분에 추가하세요. 예: "<IPv4주소>:5173"
+]
 ```
 
-4. 프론트엔드에서 참조하는 주소도 동일하게 수정합니다.
 
+4. fe/app/scr/config.js 파일에서 API_BASE 주소를 변경:
+
+```javascript
+const config = {
+  API_BASE: "http://localhost:8000", // 이 부분을 변경
+};
+```
 ---
 
 ## 3️⃣ 백엔드 실행
@@ -49,7 +60,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ## 4️⃣ 프론트엔드 실행
 
 ```bash
-cd ../fe/app
+cd fe/app
 
 # npm, vite 설치
 pip install npm
