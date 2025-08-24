@@ -19,16 +19,16 @@ from services.gemini_connection import GeminiConnection
 # key: (시작 단계, 끝 단계), value: 삽입할 메시지 리스트
 warning_messages = {
     (4, 5): [
-        "[경고] 다음 단계에서는 날카로운 가위를 사용하니까 베이지 않게 조심하세요!"
+        "다음 단계에서는 날카로운 가위를 사용하니까 베이지 않게 조심해!"
     ],
     (5, 6): [
-        "[경고] 다음 단계에서는 뜨거운 불을 사용하니까 데이지않게 조심해야돼요!! 심호흡하고 가볼까요? 후! 하!"
+        "다음 단계에서는 뜨거운 불을 사용하니까 데이지않게 조심해야해!! 심호흡하고 가볼까? 후! 하!"
     ],
     (6, 7): [
-        "[경고] 다음은 뜨거운 프라이팬에 기름을 둘러야해요! 프라이팬도, 기름도 용암처럼 뜨거우니 조심! 또 조심!"
+        "다음은 뜨거운 프라이팬에 기름을 둘러야해! 프라이팬도, 기름도 용암처럼 뜨거우니 조심! 또 조심!"
     ],
     (17, 18): [
-        "[경고] 지금 프라이팬은 매우 뜨거우니 손잡이를 세게 잡고 다음 단계를 진행해주세요!"
+        "지금 프라이팬은 매우 뜨거우니 손잡이를 세게 잡고 다음 단계를 진행하자!"
     ]
 }
 warnings_text = "\n".join(
@@ -36,9 +36,20 @@ warnings_text = "\n".join(
     for (start, end), msgs in warning_messages.items()
 )
 
+# ---------- 타이머 단계 설정 ----------
+timer_steps = {
+    8: 70,   # 1분
+    12: 130, # 2분
+    16: 130  # 2분
+}
+timer_text = "\n".join(
+    f"{step}단계에 반드시 다음 메시지를 안내: {(time-10)//60}분 동안 볶으면 돼. {(time-10)//60}분 뒤에 알려줄게!"
+    for step, time in timer_steps.items()
+)
+
 def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: str, recipe_id: int) -> str:
     return f"""
-        너는 아동을 위한 친절하고 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해.
+        너는 아동을 위한 친절한 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
         사용자는 칼 사용은 "{user_profile['knife_skill']}", 불 사용은 "{user_profile['stove_skill']}", 필러(껍질 벗기는 칼) 사용은 "{user_profile['peeler_skill']}", 가위 사용은 "{user_profile['scissors_skill']}" 수준이고,
         안전을 항상 잘 지키도록 자주 상기시켜야 해.
 
@@ -48,14 +59,13 @@ def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: s
 
         ### 핵심 규칙 (반드시 지킬 것)
         1. **한 번에 한 단계씩만 안내하며, 단계 번호를 함께 알려준다.**
-        2. **절대로 다음 단계로 넘어가지 않는다.**
-        3. **새로운 단계로 넘어가는 유일한 조건은 사용자가 정확히 "다 했어" 라고 말하는 것이다. 이 외의 모든 말은 무시한다.**
-        4. 사용자가 "다 했어" 라고 말하면 다음 단계를 안내한다.
-        5. 각 단계의 내용과 "다 했어" 라고 말하라는 안내를 함께 전달한다.
+        2. **사용자의 지시 없이 절대로 다음 단계로 넘어가지 않는다.**
+        3. **사용자가 "다 했어"라고 말하면 다음 단계를 안내하고, 원하는 단계 번호를 말하면 그 단계를 안내한다.**
+        4. 각 단계의 내용과 "다 했어" 라고 말하라는 안내를 함께 전달한다.
         
         요리 단계:
             1: "손을 깨끗이 씻으세요.",
-            2: "조리도구를 식탁 위에 준비하세요.",
+            2: "조리도구(주걱, 프라이팬)을 식탁 위에 준비하세요.",
             3: "밥, 새우, 계란, 파를 식탁 위에 준비하세요.",
             4: "굴소스, 소금, 후추를 식탁 위에 준비하세요.",
             5: "파를 잘게 썰어 준비하세요.",
@@ -75,17 +85,17 @@ def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: s
 
         요리 안내 규칙:
         - 단계 번호와 무관하게 다음 메시지를 안내해: {warnings_text}
+        - 8, 12, 16 단계에 다음 메세지를 안내해: {timer_text}
         - 부모님이 없는 상황임을 고려해, 어린 아동이 스스로 안전하게 조리할 수 있도록 각 단계를 아주 쉽고 단순하며 구체적으로, 천천히 설명해줘.
         - 각 단계에서 사용하는 조리기구와 위험 요소에 대해 반드시 안전 주의 문구를 포함해야 해.
         - 어려워하거나 모른다고 하면 더 쉽게 다시 설명해줘.
         - 항상 사용자를 응원하고 격려하는 말을 잊지 마.
-        - 모든 답변은 최대 50자 이내로 간결하게 작성하고 이모티콘은 절대로 쓰지 말고 글자만 출력해.
+        - 모든 답변은 최대 100자 이내로 간결하게 작성하고 이모티콘은 절대로 쓰지 말고 글자만 출력해.
         """
-#   - {user_profile["menu"]} 요리법만을 알려주고, 준비된 재료만 사용하며 {user_profile["allergy"]}는 절대 포함하지 않아야 해.
+
 def initial_greeting(menu: str) -> str:
     return f"""안녕, 너는 나의 요리를 도와주는 셰프얌이야. 같이 새우볶음밥을 만드는 걸 도와줘야 해.
             우선 새우볶음밥을 만든다는 걸 알려주고 1단계 손씻기부터 안내해줘.
-            사용자가 "다 했어"라고 말하기 전까지 절.대.로 다음 단계로 넘어가지 말고 같은 단계를 계속 안내해.
             """
 
 # API 라우터 정의
@@ -140,6 +150,7 @@ async def cook_assistant_ws(
         connections[user_id] = {
             "gemini": gemini,
             "current_step": 1,  # 처음 시작은 step 1
+            "current_audio_id": 0
         }
 
         # Wait for initial configuration
@@ -159,11 +170,33 @@ async def cook_assistant_ws(
         await gemini.send_text(initial_greeting(user_profile["menu"]))
         print("시작 안내 메시지 전송 완료")
 
+        async def find_video():
+            # DB에서 step 영상 조회
+            step_video = recipe_crud.get_step_video(db, recipe_id, connections[user_id]["current_step"])
+            if step_video and step_video.url:
+                await websocket.send_json({
+                    "type": "video",
+                    "step": connections[user_id]["current_step"],
+                    "data": step_video.url
+                })
+            else:
+                await websocket.send_json({
+                    "type": "video",
+                    "step": connections[user_id]["current_step"],
+                    "data": ""
+                })
+                print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
+
+        async def run_timer(time):
+            await asyncio.sleep(time)
+            await connections[user_id]["gemini"].send_text(
+                f"{(time-10)//60}분 타이머가 끝났어. "
+                f"타이머가 끝났다고 말해주고, 다 했으면 '다 했어'라고 말하라고 안내해."
+            )
 
         # 클라이언트 메시지 처리
         async def receive_from_client():
             try:
-                print("사용자에게 받기")
                 while True:
                     # 연결 종료 확인
                     if websocket.client_state.value == 3:  # WebSocket.CLOSED
@@ -171,7 +204,6 @@ async def cook_assistant_ws(
                         return
 
                     message = await websocket.receive()
-                    print(message)
 
                     if message["type"] == "websocket.disconnect":
                         print("Received disconnect message")
@@ -191,38 +223,7 @@ async def cook_assistant_ws(
                             await gemini.send_image(message_content["data"])
                         elif msg_type == "text":
                             user_text = message_content["data"].strip()
-                            # noise, 빈 문자열, 기타 잡음 무시
-                            def is_meaningful(text: str) -> bool:
-                                text = text.strip()
-                                noise_strings = {"<noise>", "noise", "…", "...", ".", "", " "}
-
-                                # 사전 단순 필터링
-                                if text.lower() in noise_strings:
-                                    return False
-
-                                # 너무 짧거나 숫자만 입력 제외
-                                if len(text) <= 1:
-                                    return False
-                                if text.isdigit():
-                                    return False
-
-                                # 온점 등 특수문자만 있으면 제외
-                                if re.fullmatch(r"[.]{1,}", text):
-                                    return False
-
-                                # 한글 자음, 모음 단독만 있는 경우 제외 (초성중성종성만 있으면)
-                                if re.fullmatch(r"[ㄱ-ㅎㅏ-ㅣ]+", text):
-                                    return False
-
-                                # 한 글자가 반복되는 단순 노이즈(예: ㅋㅋㅋ, ㅎㅎㅎ) 걸러내기
-                                if re.fullmatch(r"(.)\1{2,}", text):
-                                    return False
-
-                                # 의미 있다고 판단되면 True 반환
-                                return True
-                            if not is_meaningful(user_text):
-                                print(f"Ignoring noise or meaningless input: '{user_text}'")
-                            else:
+                            if len(user_text) > 1 and not user_text.isdigit():
                                 await gemini.send_text(user_text)
                         elif msg_type == "config":
                             # config 메시지 처리: Gemini 설정 업데이트
@@ -248,83 +249,59 @@ async def cook_assistant_ws(
                 print(f"Fatal error in receive_from_client: {str(e)}")
                 return
 
-
-        # Gemini 응답 처리
         async def receive_from_gemini():
-            try:
-                print("제미나이에게 받기")
-                while True:
-                    if websocket.client_state.value == 3:  # WebSocket.CLOSED
-                        print("WebSocket closed, stopping Gemini receiver")
-                        return
-
-                    # GeminiConnection에서 응답 받기 (dict 형태)
-                    msg = await gemini.receive()
-
-                    input_texts = msg.get("input_transcriptions", [])
+            token_buffer = ""
+            while True:
+                if websocket.client_state.value == 3:
+                    return
+                try:
+                    msg = await gemini.receive()  # dict 형태, 토큰 단위 스트리밍
+                    # input_texts = msg.get("input_transcriptions", [])
                     output_texts = msg.get("output_transcriptions", [])
-                    audio_array = msg.get("audio", None)
+                    audio_array = msg.get("audio")
 
-                    # 입력 텍스트 전송 (예: 음성 인식 결과)
-                    for input_text in input_texts:
-                        await websocket.send_json({
-                            "type": "input_text",
-                            "data": input_text
-                        })
-                        # print(f"Received input transcription: {input_text}")
+                    # # 입력 텍스트 전송
+                    # for input_text in input_texts:
+                    #     await websocket.send_json({"type": "input_text", "data": input_text})
 
-                    # 출력 텍스트 전송 (Gemini 응답)
-                    if output_texts:
+                    # output_texts 자체가 이번 턴에서 나온 전체 응답이라면
+                    full_output = "".join(output_texts).strip()
+                    if full_output:
+                        await websocket.send_json({"type": "output_text", "data": full_output})
 
-                        full_output_text = ''.join(output_texts)
-                        await websocket.send_json({
-                            "type": "output_text",
-                            "data": full_output_text
-                        })
-                        print(f"Received output transcription: {full_output_text}")
-                        
-                        if "단계" in full_output_text:
+                    # 오디오 전송 시
+                    if audio_array is not None:
+                        connections[user_id]["current_audio_id"] += 1
+                        audio_id = connections[user_id]["current_audio_id"]
+                        await websocket.send_json({"type": "audio_start", "id": audio_id})
+                        await websocket.send_bytes(audio_array.tobytes())
+                        await websocket.send_json({"type": "audio_end", "id": audio_id})
+
+                    # 턴 완료 시
+                    if msg.get("turn_complete", False):
+                        # 남은 버퍼 전송
+                        if token_buffer.strip():
+                            await websocket.send_json({"type": "output_text", "data": token_buffer.strip()})
+                            token_buffer = ""
+                        await websocket.send_json({"type": "turn_complete", "data": True})
+
+                    # 단계 인식 및 동영상 전송
+                    full_output_text = "".join(output_texts)  # 모든 토큰 합치기
+                    if "단계" in full_output_text:
                             # '숫자 + 단계' 패턴 찾기
                             match = re.search(r"(\d+)\s*단계", full_output_text)
                             if match:
                                 cur_step = int(match.group(1))  # 단계 숫자 추출
                                 connections[user_id]["current_step"] = cur_step
                                 print(f"✅ Step set to {connections[user_id]['current_step']}")
+                            asyncio.create_task(find_video())
+                            # 타이머 기능
+                            if cur_step in timer_steps.keys():
+                                asyncio.create_task(run_timer(timer_steps[cur_step]))
 
-                            # DB에서 step 영상 조회
-                            step_video = recipe_crud.get_step_video(db, recipe_id, connections[user_id]["current_step"])
-                            if step_video and step_video.url:
-                                await websocket.send_json({
-                                    "type": "video",
-                                    "step": connections[user_id]["current_step"],
-                                    "data": step_video.url
-                                })
-                            else:
-                                await websocket.send_json({
-                                    "type": "video",
-                                    "step": connections[user_id]["current_step"],
-                                    "data": ""
-                                })
-                                print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
-
-                    # Gemini 응답 음성 처리
-                    if audio_array is not None:
-                        # PCM numpy array → bytes 변환
-                        audio_bytes = audio_array.tobytes()
-
-                        # 바이너리 데이터 직접 전송
-                        await websocket.send_bytes(audio_bytes)
-
-                    # 턴이 끝났다는 신호
-                    if msg.get("turn_complete", False):
-                        await websocket.send_json({
-                            "type": "turn_complete",
-                            "data": True
-                        })
-
-            except Exception as e:
-                print(f"Error receiving from Gemini: {e}")
-
+                except Exception as e:
+                    print(f"Gemini receive error: {e}")
+                    await asyncio.sleep(0.05)
 
         # 두 태스크(concurrent 실행)
         async with asyncio.TaskGroup() as tg:
@@ -340,3 +317,4 @@ async def cook_assistant_ws(
         if user_id in connections:
             await connections[user_id]['gemini'].close()
             del connections[user_id]
+            

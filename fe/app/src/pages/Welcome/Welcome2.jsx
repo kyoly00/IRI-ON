@@ -41,7 +41,7 @@ export default function Welcome2() {
   useEffect(() => {
     const fetchTools = async () => {
       try {
-        const res = await fetch("http://192.168.0.11:8000/tools");
+        const res = await fetch("http://localhost:8000/tools");
         if (!res.ok) throw new Error("도구 불러오기 실패");
         const data = await res.json();
         setToolsList(data); // [{tool_id:1, name:"에어프라이어"}, ...]
@@ -95,7 +95,7 @@ export default function Welcome2() {
       };
 
       const res1 = await fetch(
-        `http://192.168.0.11:8000/users/profile?user_id=${userId}`,
+        `http://localhost:8000/users/profile?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -108,7 +108,7 @@ export default function Welcome2() {
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
 
       const res2 = await fetch(
-        `http://192.168.0.11:8000/users/tools?user_id=${userId}`,
+        `http://localhost:8000/users/tools?user_id=${userId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

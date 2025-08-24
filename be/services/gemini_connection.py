@@ -24,7 +24,8 @@ class GeminiConnection:
         self.config = config or {
             "system_prompt": "너는 아동을 위한 친절하고 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해.",
             "voice": "Puck",
-            "google_search": True
+            "google_search": True,
+            "allow_interruptions": True
         }
 
     async def connect(self):

@@ -4,5 +4,6 @@ from .realtime import router as realtime_router
 from .cleanup import router as cleanup_router
 from .ingredients import router as ingredients_router
 from .tools import router as tools_router
+from .test import router as test_router
 
-all_routers = [users_router, recipes_router, realtime_router, cleanup_router, ingredients_router, tools_router]
+all_routers = [users_router, recipes_router, realtime_router, cleanup_router, ingredients_router, tools_router, test_router]

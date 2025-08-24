@@ -160,6 +160,7 @@ async def cleanup_assistant_ws(
         connections[user_id] = {
             "gemini": gemini,
             "current_step": 1,  # 처음 시작은 step 1
+            "current_audio_id": 0
         }
 
         # Wait for initial configuration
@@ -209,38 +210,7 @@ async def cleanup_assistant_ws(
                             await gemini.send_image(message_content["data"])
                         elif msg_type == "text":
                             user_text = message_content["data"].strip()
-                            # noise, 빈 문자열, 기타 잡음 무시
-                            def is_meaningful(text: str) -> bool:
-                                text = text.strip()
-                                noise_strings = {"<noise>", "noise", "…", "...", ".", "", " "}
-
-                                # 사전 단순 필터링
-                                if text.lower() in noise_strings:
-                                    return False
-
-                                # 너무 짧거나 숫자만 입력 제외
-                                if len(text) <= 1:
-                                    return False
-                                if text.isdigit():
-                                    return False
-
-                                # 온점 등 특수문자만 있으면 제외
-                                if re.fullmatch(r"[.]{1,}", text):
-                                    return False
-
-                                # 한글 자음, 모음 단독만 있는 경우 제외 (초성중성종성만 있으면)
-                                if re.fullmatch(r"[ㄱ-ㅎㅏ-ㅣ]+", text):
-                                    return False
-
-                                # 한 글자가 반복되는 단순 노이즈(예: ㅋㅋㅋ, ㅎㅎㅎ) 걸러내기
-                                if re.fullmatch(r"(.)\1{2,}", text):
-                                    return False
-
-                                # 의미 있다고 판단되면 True 반환
-                                return True
-                            if not is_meaningful(user_text):
-                                print(f"Ignoring noise or meaningless input: '{user_text}'")
-                            else:
+                            if len(user_text) > 1 and not user_text.isdigit():
                                 await gemini.send_text(user_text)
                         elif msg_type == "config":
                             # config 메시지 처리: Gemini 설정 업데이트
@@ -266,82 +236,55 @@ async def cleanup_assistant_ws(
                 print(f"Fatal error in receive_from_client: {str(e)}")
                 return
 
-
-        # Gemini 응답 처리
         async def receive_from_gemini():
-            try:
-                while True:
-                    if websocket.client_state.value == 3:  # WebSocket.CLOSED
-                        print("WebSocket closed, stopping Gemini receiver")
-                        return
-
-                    # GeminiConnection에서 응답 받기 (dict 형태)
-                    msg = await gemini.receive()
-
+            token_buffer = ""
+            while True:
+                if websocket.client_state.value == 3:
+                    return
+                try:
+                    msg = await gemini.receive()  # dict 형태, 토큰 단위 스트리밍
                     input_texts = msg.get("input_transcriptions", [])
                     output_texts = msg.get("output_transcriptions", [])
-                    audio_array = msg.get("audio", None)
+                    audio_array = msg.get("audio")
 
-                    # 입력 텍스트 전송 (예: 음성 인식 결과)
+                    # 입력 텍스트 전송
                     for input_text in input_texts:
-                        await websocket.send_json({
-                            "type": "input_text",
-                            "data": input_text
-                        })
-                        # print(f"Received input transcription: {input_text}")
+                        await websocket.send_json({"type": "input_text", "data": input_text})
 
-                    # 출력 텍스트 전송 (Gemini 응답)
-                    if output_texts:
+                    # output_texts 자체가 이번 턴에서 나온 전체 응답이라면
+                    full_output = "".join(output_texts).strip()
+                    if full_output:
+                        await websocket.send_json({"type": "output_text", "data": full_output})
 
-                        full_output_text = ''.join(output_texts)
-                        await websocket.send_json({
-                            "type": "output_text",
-                            "data": full_output_text
-                        })
-                        print(f"Received output transcription: {full_output_text}")
-                        
-                        if "단계" in full_output_text:
-                            # '숫자 + 단계' 패턴 찾기
-                            match = re.search(r"(\d+)\s*단계", full_output_text)
-                            if match:
-                                cur_step = int(match.group(1))  # 단계 숫자 추출
-                                connections[user_id]["current_step"] = cur_step
-                                print(f"✅ Step set to {connections[user_id]['current_step']}")
-
-                            # DB에서 step 영상 조회
-                            step_video = recipe_crud.get_step_video(db, recipe_id, connections[user_id]["current_step"])
-                            if step_video and step_video.url:
-                                await websocket.send_json({
-                                    "type": "video",
-                                    "step": connections[user_id]["current_step"],
-                                    "data": step_video.url
-                                })
-                            else:
-                                await websocket.send_json({
-                                    "type": "video",
-                                    "step": connections[user_id]["current_step"],
-                                    "data": ""
-                                })
-                                print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
-
-                    # Gemini 응답 음성 처리
+                    # 오디오 전송 시
                     if audio_array is not None:
-                        # PCM numpy array → bytes 변환
-                        audio_bytes = audio_array.tobytes()
+                        connections[user_id]["current_audio_id"] += 1
+                        audio_id = connections[user_id]["current_audio_id"]
+                        await websocket.send_json({"type": "audio_start", "id": audio_id})
+                        await websocket.send_bytes(audio_array.tobytes())
+                        await websocket.send_json({"type": "audio_end", "id": audio_id})
 
-                        # 바이너리 데이터 직접 전송
-                        await websocket.send_bytes(audio_bytes)
-
-                    # 턴이 끝났다는 신호
+                    # 턴 완료 시
                     if msg.get("turn_complete", False):
-                        await websocket.send_json({
-                            "type": "turn_complete",
-                            "data": True
-                        })
+                        # 남은 버퍼 전송
+                        if token_buffer.strip():
+                            await websocket.send_json({"type": "output_text", "data": token_buffer.strip()})
+                            token_buffer = ""
+                        await websocket.send_json({"type": "turn_complete", "data": True})
 
-            except Exception as e:
-                print(f"Error receiving from Gemini: {e}")
+                    # 단계 인식 및 동영상 전송
+                    for text in output_texts:
+                        match = re.search(r"(\d+)\s*단계", text)
+                        if match:
+                            cur_step = int(match.group(1))
+                            connections[user_id]["current_step"] = cur_step
+                            step_video = recipe_crud.get_step_video(db, recipe_id, cur_step)
+                            video_url = step_video.url if step_video else ""
+                            await websocket.send_json({"type": "video", "step": cur_step, "data": video_url})
 
+                except Exception as e:
+                    print(f"Gemini receive error: {e}")
+                    await asyncio.sleep(0.05)
 
         # 두 태스크(concurrent 실행)
         async with asyncio.TaskGroup() as tg:
@@ -357,3 +300,4 @@ async def cleanup_assistant_ws(
         if user_id in connections:
             await connections[user_id]['gemini'].close()
             del connections[user_id]
+            
