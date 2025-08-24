@@ -18,11 +18,11 @@ export default function Menu() {
     try {
       let url = "";
       if (mode === "전체") {
-        url = "http://192.168.35.9:8000/recipes/";
+        url = "http://192.168.0.11:8000/recipes/";
       } else {
         // TODO: 로그인 후 실제 user_id로 교체
         const userId = localStorage.getItem("user_id") || 1;
-        url = `http://192.168.35.9:8000/recipes/recommendations/${userId}`;
+        url = `http://192.168.0.11:8000/recipes/recommendations/${userId}`;
       }
 
       const params = new URLSearchParams();

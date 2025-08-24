@@ -23,7 +23,7 @@ export default function CleanupExplain() {
   const isPlayingRef = useRef(false);
 
   /* ===== WebSocket URL (필요 시 수정) ===== */
-  const WS_URL = "ws://192.168.35.9:8000/assistant/ws/cleanup-assistant/2/42";
+  const WS_URL = "ws://192.168.0.11:8000/assistant/ws/cleanup-assistant/2/42";
 
   /* ===== 스트리밍 시작/중지 ===== */
   const startStream = async () => {
