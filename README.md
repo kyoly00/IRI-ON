@@ -7,8 +7,8 @@
 ## 1️⃣ 프로젝트 클론
 
 ```bash
-git clone <레포지토리_URL>
-cd <클론한_프로젝트_폴더>
+git clone https://github.com/SKT-FLY-AI-team5/IRI-ON
+cd IRI-ON
 ```
 
 ---
