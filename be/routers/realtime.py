@@ -1,53 +1,90 @@
-import os
-import json
-import base64
-import re
-from typing import Dict
 import asyncio
-from concurrent.futures import CancelledError
+import json
+import os
 import re
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+import requests
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from crud import recipe_crud, user_crud
 from db.session import get_db
-from crud import user_crud, recipe_crud
-from services.gemini_connection import GeminiConnection
+
+router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+timer_steps = {1: 20, 2: 100, 8: 30, 12: 120, 16: 30}
+connections: Dict[int, Dict[str, Any]] = {}
+TOOLS_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "realtime_tools.json"
 
 
-# ---------- 프롬프트 ----------
-# key: (시작 단계, 끝 단계), value: 삽입할 메시지 리스트
-warning_messages = {
-    (4, 5): [
-        "다음 단계에서는 날카로운 가위를 사용하니까 베이지 않게 조심해!"
-    ],
-    (5, 6): [
-        "다음 단계에서는 뜨거운 불을 사용하니까 데이지않게 조심해야해!! 심호흡하고 가볼까? 후! 하!"
-    ],
-    (6, 7): [
-        "다음은 뜨거운 프라이팬에 기름을 둘러야해! 프라이팬도, 기름도 용암처럼 뜨거우니 조심! 또 조심!"
-    ],
-    (17, 18): [
-        "지금 프라이팬은 매우 뜨거우니 손잡이를 세게 잡고 다음 단계를 진행하자!"
-    ]
-}
-warnings_text = "\n".join(
-    f"단계 {start}와 {end} 사이에 반드시 다음 메시지를 안내: {', '.join(msgs)}"
-    for (start, end), msgs in warning_messages.items()
-)
+class RealtimeSessionRequest(BaseModel):
+    model: str = "gpt-4o-realtime-preview"
+    voice: str = "ash"
+    instructions: Optional[str] = None
 
-# ---------- 타이머 단계 설정 ----------
-timer_steps = {
-    8: 70,   # 1분
-    12: 130, # 2분
-    16: 130  # 2분
-}
-timer_text = "\n".join(
-    f"{step}단계에 반드시 다음 메시지를 안내: {(time-10)//60}분 동안 볶으면 돼. {(time-10)//60}분 뒤에 알려줄게!"
-    for step, time in timer_steps.items()
-)
 
-BASE_PROMPT = """
+def load_tools_config() -> Dict[str, Any]:
+    if not TOOLS_CONFIG_PATH.exists():
+        return {"tools": [], "tool_choice": "auto"}
+    try:
+        with open(TOOLS_CONFIG_PATH, "r", encoding="utf-8") as config_file:
+            return json.load(config_file)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Invalid tool config: {exc}") from exc
+
+
+@router.get("/openai-realtime/config")
+async def get_realtime_tool_config() -> Dict[str, Any]:
+    return load_tools_config()
+
+
+@router.post("/openai-realtime/session")
+async def create_openai_realtime_session(
+    payload: RealtimeSessionRequest,
+) -> Dict[str, Any]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+
+    config = load_tools_config()
+    body = {
+        "model": payload.model,
+        "voice": payload.voice,
+        "modalities": ["text", "audio"],
+        "instructions": payload.instructions or "",
+        "tools": config.get("tools", []),
+        "tool_choice": config.get("tool_choice", "auto"),
+    }
+
+    response = requests.post(
+        "https://api.openai.com/v1/realtime/sessions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json=body,
+        timeout=30,
+    )
+
+    if response.status_code >= 400:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    session = response.json()
+    if config.get("mcp_tool_endpoints"):
+        session["mcp_tool_endpoints"] = config["mcp_tool_endpoints"]
+    return session
+
+
+def build_system_prompt(
+    user_profile: dict,
+    ingredients_text: str,
+    tools_text: str,
+    recipe_id: int,
+) -> str:
+    return f"""
         너는 아동을 위한 친절한 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
         사용자는 칼 사용은 "{knife_skill}", 불 사용은 "{stove_skill}", 필러(껍질 벗기는 칼) 사용은 "{peeler_skill}", 가위 사용은 "{scissors_skill}" 수준이고,
         안전을 항상 잘 지키도록 자주 상기시켜야 해.
@@ -92,32 +129,165 @@ BASE_PROMPT = """
         - 모든 답변은 최대 100자 이내로 간결하게 작성하고 이모티콘은 절대로 쓰지 말고 글자만 출력해.
         """
 
-def build_system_prompt(user_profile: dict, ingredients_text: str, tools_text: str) -> str:
-    return BASE_PROMPT.format(
-        knife_skill=user_profile["knife_skill"],
-        stove_skill=user_profile["stove_skill"],
-        peeler_skill=user_profile["peeler_skill"],
-        scissors_skill=user_profile["scissors_skill"],
-        allergy=user_profile["allergy"],
-        ingredients_text=ingredients_text,
-        tools_text=tools_text,
-        warnings_text=warnings_text,
-        timer_text=timer_text
+
+async def send_session_bootstrap(
+    websocket: WebSocket,
+    user_profile: dict,
+    system_prompt: str,
+    ingredients_text: str,
+    tools_text: str,
+) -> None:
+    await websocket.send_json(
+        {
+            "type": "session_info",
+            "data": {
+                "system_prompt": system_prompt.strip(),
+                "timer_steps": timer_steps,
+                "user_profile": user_profile,
+                "ingredients": ingredients_text,
+                "tools": tools_text,
+            },
+        }
     )
 
-def initial_greeting(menu: str) -> str:
-    return f"""안녕, 너는 나의 요리를 도와주는 셰프얌이야. 같이 새우볶음밥을 만드는 걸 도와줘야 해.
-            우선 새우볶음밥을 만든다는 걸 알려주고 1단계 손씻기부터 안내해줘.
-            """
 
-# API 라우터 정의
-router = APIRouter(prefix="/assistant", tags=["assistant"])
+async def handle_assistant_output(
+    *,
+    user_id: int,
+    chunk: str,
+    is_final: bool,
+    db: Session,
+    recipe_id: int,
+) -> None:
+    connection = connections.get(user_id)
+    if not connection:
+        return
 
-# Store active connections
-connections: Dict[str, GeminiConnection] = {}
+    connection["partial_output"] += chunk
 
-user_id = 2
-recipe_id = 42
+    if not is_final:
+        return
+
+    full_output = connection["partial_output"].strip()
+    connection["partial_output"] = ""
+
+    if not full_output:
+        return
+
+    await trigger_aux_tasks(
+        user_id=user_id,
+        full_output_text=full_output,
+        db=db,
+        recipe_id=recipe_id,
+    )
+
+
+async def trigger_aux_tasks(
+    *,
+    user_id: int,
+    full_output_text: str,
+    db: Session,
+    recipe_id: int,
+) -> None:
+    connection = connections.get(user_id)
+    if not connection:
+        return
+
+    match = re.search(r"(\d+)\s*단계", full_output_text)
+    if not match:
+        return
+
+    cur_step = int(match.group(1))
+    connection["current_step"] = cur_step
+
+    websocket = connection.get("websocket")
+    if websocket:
+        await websocket.send_json({"type": "step_detected", "step": cur_step})
+
+    asyncio.create_task(
+        handle_video_task(
+            user_id=user_id,
+            recipe_id=recipe_id,
+            cur_step=cur_step,
+            db=db,
+        )
+    )
+
+    if check_for_timer_command(cur_step):
+        timer_value = timer_steps[cur_step]
+        asyncio.create_task(run_timer_task(user_id=user_id, time=timer_value, cur_step=cur_step))
+
+
+async def handle_video_task(
+    *,
+    user_id: int,
+    recipe_id: int,
+    cur_step: int,
+    db: Session,
+) -> None:
+    try:
+        step_video = await asyncio.to_thread(
+            recipe_crud.get_step_video, db, recipe_id, cur_step
+        )
+        video_url = step_video.url if step_video and step_video.url else ""
+    except Exception as exc:  # pragma: no cover - logging only
+        print(f"❌ Error loading step video: {exc}")
+        video_url = ""
+
+    connection = connections.get(user_id)
+    websocket = connection.get("websocket") if connection else None
+    if not websocket:
+        return
+
+    await websocket.send_json(
+        {
+            "type": "video",
+            "step": cur_step,
+            "data": video_url,
+        }
+    )
+
+
+def check_for_timer_command(step: int) -> bool:
+    return step in timer_steps
+
+
+async def run_timer_task(*, user_id: int, time: int, cur_step: int) -> None:
+    connection = connections.get(user_id)
+    if not connection:
+        return
+
+    websocket: Optional[WebSocket] = connection.get("websocket")
+    if not websocket:
+        return
+
+    print(f"⏰ [Timer Task] {cur_step}단계 타이머 시작: {time}초")
+    try:
+        await asyncio.sleep(time)
+        await websocket.send_json(
+            {
+                "type": "timer_complete",
+                "step": cur_step,
+                "time": time,
+                "message": f"{cur_step}단계 {time}초 타이머가 끝났어. 다 했으면 '다 했어'라고 말해줘.",
+            }
+        )
+    except Exception as exc:  # pragma: no cover - logging only
+        print(f"❌ Error in run_timer_task: {exc}")
+
+
+async def cleanup_connection(user_id: int) -> None:
+    connection = connections.pop(user_id, None)
+    if not connection:
+        return
+
+    websocket: Optional[WebSocket] = connection.get("websocket")
+    if websocket:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass
+
 
 @router.websocket("/ws/cook-assistant/{user_id}/{recipe_id}")
 async def cook_assistant_ws(
@@ -126,12 +296,11 @@ async def cook_assistant_ws(
     recipe_id: int,
     db: Session = Depends(get_db),
 ):
+    await websocket.accept()
 
-    # 데이터베이스에서 사용자 프로필 및 레시피 정보 조회
     profile = user_crud.get_user_by_id(db, user_id)
     recipe = recipe_crud.get_recipe_by_id(db, recipe_id)
 
-    # 사용자 프로필 데이터 정리
     user_profile = {
         "knife_skill": "사용 가능" if getattr(profile, "can_use_knife", False) else "서툼",
         "stove_skill": "사용 가능" if getattr(profile, "can_use_fire", False) else "서툼",
@@ -140,203 +309,72 @@ async def cook_assistant_ws(
         "allergy": getattr(profile, "allergy", "") or "없음",
         "menu": getattr(recipe, "name", "요리"),
     }
+
     ingredients_text = getattr(recipe, "materials", "") or ""
     tools_text = getattr(recipe, "tools", "") or ""
-    # 시스템 프롬프트 생성
-    system_prompt_text = build_system_prompt(user_profile, ingredients_text, tools_text)
-    
-    # --- GeminiConnection 초기화 및 시작 ---
-    # Gemini Live API 설정을 위한 딕셔너리 생성
-    gemini_config = {
-        "system_prompt": system_prompt_text,
-        "voice": "kore",  # 사용할 Gemini 음성 모델 이름 (유효한 모델명인지 확인 필요)
-        "google_search": True,  # Google Search 도구 사용 여부
-        "allow_interruptions": True  # Gemini가 말하는 중 사용자 개입 허용 여부
+    system_prompt_text = build_system_prompt(
+        user_profile,
+        ingredients_text,
+        tools_text,
+        recipe_id,
+    )
+
+    connections[user_id] = {
+        "websocket": websocket,
+        "current_step": 1,
+        "partial_output": "",
     }
 
-    await websocket.accept()
+    await send_session_bootstrap(
+        websocket,
+        user_profile,
+        system_prompt_text,
+        ingredients_text,
+        tools_text,
+    )
 
     try:
-        # Create new Gemini connection for this client
-        gemini = GeminiConnection()
-        connections[user_id] = {
-            "gemini": gemini,
-            "current_step": 1,  # 처음 시작은 step 1
-            "current_audio_id": 0
-        }
+        while True:
+            message = await websocket.receive()
 
-        # Wait for initial configuration
-        config_data = gemini_config
+            if message["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect
 
-        # Set the configuration
-        gemini.set_config(config_data)
-        
-        # # 웹소켓 메시지 최대 크기 설정 (대용량 오디오/이미지 청크를 위함)
-        # websocket._max_size = 4 * 1024 * 1024
+            if "text" not in message:
+                continue
 
-        # Initialize Gemini connection
-        await gemini.connect()
-        print("API 연결 완료")
-
-        # 시작 안내 메시지 전달 (텍스트 메시지)
-        await gemini.send_text(initial_greeting(user_profile["menu"]))
-        print("시작 안내 메시지 전송 완료")
-
-        async def find_video():
-            # DB에서 step 영상 조회
-            step_video = recipe_crud.get_step_video(db, recipe_id, connections[user_id]["current_step"])
-            if step_video and step_video.url:
-                await websocket.send_json({
-                    "type": "video",
-                    "step": connections[user_id]["current_step"],
-                    "data": step_video.url
-                })
-            else:
-                await websocket.send_json({
-                    "type": "video",
-                    "step": connections[user_id]["current_step"],
-                    "data": ""
-                })
-                print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
-
-        async def run_timer(time):
-            await asyncio.sleep(time)
-            await connections[user_id]["gemini"].send_text(
-                f"{(time-10)//60}분 타이머가 끝났어. "
-                f"타이머가 끝났다고 말해주고, 다 했으면 '다 했어'라고 말하라고 안내해."
-            )
-
-        # 클라이언트 메시지 처리
-        async def receive_from_client():
             try:
-                while True:
-                    # 연결 종료 확인
-                    if websocket.client_state.value == 3:  # WebSocket.CLOSED
-                        print("WebSocket connection closed by client")
-                        return
+                payload = json.loads(message["text"])
+            except json.JSONDecodeError:
+                print(f"❌ Invalid JSON payload: {message['text']}")
+                continue
 
-                    message = await websocket.receive()
+            msg_type = payload.get("type")
 
-                    if message["type"] == "websocket.disconnect":
-                        print("Received disconnect message")
-                        return
+            if msg_type == "assistant_output":
+                chunk = payload.get("data", "")
+                is_final = payload.get("is_final", False)
+                await handle_assistant_output(
+                    user_id=user_id,
+                    chunk=chunk,
+                    is_final=is_final,
+                    db=db,
+                    recipe_id=recipe_id,
+                )
+            elif msg_type == "client_event":
+                await websocket.send_json(
+                    {
+                        "type": "ack",
+                        "data": payload.get("event", "unknown"),
+                    }
+                )
+            else:
+                print(f"⚠️ Unknown message type: {msg_type}")
 
-                    if "text" not in message:
-                        print("Received message without text, ignoring")
-                        continue
-
-                    try:
-                        message_content = json.loads(message["text"])
-                        msg_type = message_content["type"]
-
-                        if msg_type == "audio":
-                            await gemini.send_audio(message_content["data"])
-                        elif msg_type == "image":
-                            await gemini.send_image(message_content["data"])
-                        elif msg_type == "text":
-                            user_text = message_content["data"].strip()
-                            if len(user_text) > 1 and not user_text.isdigit():
-                                await gemini.send_text(user_text)
-                        elif msg_type == "config":
-                            # config 메시지 처리: Gemini 설정 업데이트
-                            new_config = message_content.get("data", {})
-                            gemini.set_config(new_config)
-                            print(f"Received config update: {new_config}")
-                        else:
-                            print(f"Unknown message type: {msg_type}")
-
-                    except json.JSONDecodeError as e:
-                        print(f"JSON decode error: {e}")
-                        continue
-                    except KeyError as e:
-                        print(f"Key error in message: {e}")
-                        continue
-                    except Exception as e:
-                        print(f"Error processing client message: {str(e)}")
-                        if "disconnect message" in str(e):
-                            return
-                        continue
-
-            except Exception as e:
-                print(f"Fatal error in receive_from_client: {str(e)}")
-                return
-
-        async def receive_from_gemini():
-            token_buffer = ""
-            while True:
-                if websocket.client_state.value == 3:
-                    return
-                try:
-                    msg = await gemini.receive()  # dict 형태, 토큰 단위 스트리밍
-                    # input_texts = msg.get("input_transcriptions", [])
-                    output_texts = msg.get("output_transcriptions", [])
-                    audio_array = msg.get("audio")
-
-                    # # 입력 텍스트 전송
-                    # for input_text in input_texts:
-                    #     await websocket.send_json({"type": "input_text", "data": input_text})
-
-                    # output_texts 자체가 이번 턴에서 나온 전체 응답이라면
-                    full_output = "".join(output_texts).strip()
-                    if full_output:
-                        await websocket.send_json({"type": "output_text", "data": full_output})
-
-                    # 오디오 전송 시
-                    if audio_array is not None:
-                        connections[user_id]["current_audio_id"] += 1
-                        audio_id = connections[user_id]["current_audio_id"]
-                        await websocket.send_json({"type": "audio_start", "id": audio_id})
-                        await websocket.send_bytes(audio_array.tobytes())
-                        await websocket.send_json({"type": "audio_end", "id": audio_id})
-
-                    # if audio_array is not None:
-                    #     connections[user_id]["current_audio_id"] += 1
-                    #     audio_id = connections[user_id]["current_audio_id"]
-                    #     await websocket.send_json({"type": "audio_start", "id": audio_id})
-                    #     # chunk 단위로 바로 전송
-                    #     for chunk in audio_array:
-                    #         await websocket.send_bytes(chunk.tobytes())
-                    #     await websocket.send_json({"type": "audio_end", "id": audio_id})
-
-                    # 턴 완료 시
-                    if msg.get("turn_complete", False):
-                        # 남은 버퍼 전송
-                        if token_buffer.strip():
-                            await websocket.send_json({"type": "output_text", "data": token_buffer.strip()})
-                            token_buffer = ""
-                        await websocket.send_json({"type": "turn_complete", "data": True})
-
-                    # 단계 인식 및 동영상 전송
-                    full_output_text = "".join(output_texts)  # 모든 토큰 합치기
-                    asyncio.create_task(process_step_detection(full_output_text, user_id))
-
-                except Exception as e:
-                    print(f"Gemini receive error: {e}")
-                    continue
-
-        async def process_step_detection(full_output_text, user_id):
-            if "단계" in full_output_text:
-                match = re.search(r"(\d+)\s*단계", full_output_text)
-                if match:
-                    cur_step = int(match.group(1))
-                    connections[user_id]["current_step"] = cur_step
-                    print(f"✅ Step set to {connections[user_id]['current_step']}")
-                    asyncio.create_task(find_video())
-                if cur_step in timer_steps:
-                    asyncio.create_task(run_timer(user_id, timer_steps[cur_step]))
-
-        # 두 태스크(concurrent 실행)
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(receive_from_client())
-            print("음성 입력 받음")
-            tg.create_task(receive_from_gemini())
-            print("Gemini 응답 받음")
-
-    except Exception as e:
-        print(f"WebSocket error: {e}")
+    except WebSocketDisconnect:
+        print("WebSocket disconnected by client")
+    except Exception as exc:
+        print(f"WebSocket error: {exc}")
     finally:
-        # Cleanup
-        if user_id in connections:
-            await connections[user_id]['gemini'].close()
-            del connections[user_id]
-            
+        await cleanup_connection(user_id)
+

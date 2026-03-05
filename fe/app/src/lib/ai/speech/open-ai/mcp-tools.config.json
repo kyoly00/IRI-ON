@@ -1,0 +1,129 @@
+{
+  "defaultVoiceTools": [
+    {
+      "type": "function",
+      "name": "changeBrowserTheme",
+      "description": "Changes the browser theme to light or dark mode.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ],
+            "description": "The theme to apply."
+          }
+        },
+        "required": [
+          "theme"
+        ]
+      }
+    },
+    {
+      "type": "function",
+      "name": "endConversation",
+      "description": "Ends the voice conversation when the user clearly wants to exit.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ],
+  "mcpTools": [
+    {
+      "type": "function",
+      "name": "start_timer",
+      "description": "Starts a timer for a specific cooking step. For example, call this function when the user says something like 'I need a 20-second timer for step 1.'",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "The cooking step number for which to start the timer."
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Duration of the timer in seconds."
+          },
+          "message": {
+            "type": "string",
+            "description": "Optional message to deliver to the user when the timer finishes."
+          }
+        },
+        "required": [
+          "step",
+          "duration"
+        ]
+      }
+    },
+    {
+      "type": "function",
+      "name": "send_video_url",
+      "description": "Delivers the video URL for a specific cooking step. For example, call this function when the user says 'Show me the video for step 1.' The function will automatically match the current instruction text to the most relevant step.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "The cooking step number (optional if text matching is used)."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "type": "function",
+      "name": "web_search",
+      "description": "Search the web for cooking-related information such as ingredient substitutes, where to buy ingredients, cooking tips, or recipe variations. Use this when the user asks about alternatives, replacements, purchasing options, or cooking advice. Examples: '대파 대체재료 뭐가 있어?', '이마트에서 어디서 살 수 있어?', '이 재료 없으면 뭐로 대체할 수 있어?'",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query. Should be specific and include context about what the user is looking for (ingredient name, substitute, store, etc.)."
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of search results to return. Default is 5.",
+            "default": 5
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  ],
+  "mcpToolEndpoints": [
+    {
+      "id": "chef-tools.start_timer",
+      "name": "start_timer",
+      "description": "Timer start function",
+      "endpoint": "/assistant/mcp/tools/start_timer",
+      "method": "POST"
+    },
+    {
+      "id": "chef-tools.send_video_url",
+      "name": "send_video_url",
+      "description": "Video URL delivery function",
+      "endpoint": "/assistant/mcp/tools/send_video_url",
+      "method": "POST"
+    },
+    {
+      "id": "tavily.web_search",
+      "name": "web_search",
+      "description": "Web search using Tavily MCP",
+      "endpoint": "/assistant/mcp/tools/web_search",
+      "method": "POST"
+    }
+  ],
+  "mcpServers": {
+    "tavily-remote-mcp": {
+      "command": "npx -y mcp-remote https://mcp.tavily.com/mcp/?tavilyApiKey=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",
+      "env": {}
+    }
+  }
+}

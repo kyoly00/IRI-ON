@@ -1,0 +1,45 @@
+{
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "type": "function",
+      "name": "changeBrowserTheme",
+      "description": "Change the browser theme between light and dark mode.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ]
+          }
+        },
+        "required": [
+          "theme"
+        ]
+      }
+    },
+    {
+      "type": "function",
+      "name": "endConversation",
+      "description": "End the current voice conversation when the user clearly wants to stop.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ],
+  "mcp_tool_endpoints": [
+    {
+      "id": "chef-tools.timer",
+      "name": "chef-tools",
+      "description": "Internal MCP bridge to ChefYam automation tools.",
+      "endpoint": "/assistant/mcp/tools/{toolName}",
+      "method": "POST"
+    }
+  ]
+}
+

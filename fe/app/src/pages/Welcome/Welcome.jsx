@@ -15,8 +15,8 @@ export default function Welcome() {
       <img src="/Onboarding.png" alt="온보딩" className="onboarding-img" />
         {/* 👉 시작하기 버튼 위 텍스트 */}
     <div className="welcome-subtitle">
-      <div className="small-text">결식아동을 위한</div>
-      <div className="big-text">AI 요리 선생님</div>
+      {/* <div className="small-text">결식아동을 위한</div> */}
+      {/* <div className="big-text">AI 요리 선생님</div> */}
     </div>
       <button className="welcome-start-btn" onClick={handleStart}>
         시작하기

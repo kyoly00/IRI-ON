@@ -1,9 +1,8 @@
 /* ===== 레이아웃 ===== */
 .complete-page {
-  position: relative;              /* 상단 로고 고정 기준점 */
   min-height: 100vh;
   background: #fdf9f3;
-  padding: 72px 16px 28px;         /* 🔸로고 높이만큼 위 여백 확보 */
+  padding: 20px 16px 28px;
   box-sizing: border-box;
 
   display: flex;
@@ -12,23 +11,20 @@
   gap: 14px;
 }
 
-/* ===== 상단 좌측 고정 로고 ===== */
 .complete-header {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  display: block;
-  width: auto;
-  max-width: none;
-}
-.complete-header .logo {
-  width: 120px;     /* Home.jsx 로고 높이(≈40px)와 비슷하게 */
-  height: auto;
-  user-select: none;
-  pointer-events: none;
+  width: 100%;
+  max-width: 430px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* (남아있을 수 있는) 원형 아이콘 */
+.logo {
+  height: 48px;
+  user-select: none;
+}
+
+/* ===== 메인 아이콘 (원형 카드) ===== */
 .main-icon {
   width: 220px;
   height: 220px;
@@ -43,24 +39,34 @@
   animation: pulse 2s infinite ease-in-out;
   margin-top: 4px;
 }
+
 .cooking-img {
   width: 120px;
   height: auto;
   animation: glow 2s infinite ease-in-out;
 }
-@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-@keyframes glow  { 0%,100%{filter:drop-shadow(0 0 6px rgba(255,255,255,.65))} 50%{filter:drop-shadow(0 0 14px rgba(255,255,255,.9))} }
 
-/* ===== 유튜브 영역 ===== */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255,255,255,.65)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(255,255,255,.9)); }
+}
+
+/* ===== 유튜브 영역 (반응형) ===== */
 .cooking-video {
   width: 100%;
   max-width: 430px;
 }
+
 .cooking-video iframe {
   display: block;
   width: 100% !important;
   height: auto !important;
-  aspect-ratio: 16/9;
+  aspect-ratio: 16 / 9;
   border: 0;
   border-radius: 12px;
   background: #000;
@@ -90,6 +96,7 @@
   margin-top: 14px;
   flex-wrap: wrap;
 }
+
 .cooking-controls button {
   padding: 9px 16px;
   border-radius: 28px;
@@ -113,6 +120,7 @@
   margin-top: 8px;
   flex-wrap: wrap;
 }
+
 .control-buttons .play-btn,
 .control-buttons .stop-btn {
   display: inline-flex;
@@ -126,14 +134,17 @@
   cursor: pointer;
   transition: filter .2s ease, transform .05s ease;
 }
+
 .control-buttons .play-btn { background: #4caf50; }
+.control-buttons .play-btn:hover { filter: brightness(0.95); }
+
 .control-buttons .stop-btn { background: #f44336; }
-.control-buttons .play-btn:hover,
 .control-buttons .stop-btn:hover { filter: brightness(0.95); }
+
 .control-buttons .play-btn:active,
 .control-buttons .stop-btn:active { transform: translateY(1px); }
 
-/* ===== 대화 카드 ===== */
+/* ===== 대화 로그 카드 ===== */
 .card {
   width: 100%;
   max-width: 430px;
@@ -142,9 +153,8 @@
   box-shadow: 0 2px 10px rgba(0,0,0,.08);
   padding: 14px;
   margin-top: 12px;
-  position: relative;
-  overflow: hidden;
 }
+
 .card h2 {
   font-size: 15px;
   font-weight: 800;
@@ -152,81 +162,14 @@
   color: #333;
 }
 
-/* ===== 대화: 현재 중앙, 직전 회색 ===== */
-.msg-stage{
-  position: relative;
-  height: 210px;                 /* 필요 시 조절 */
-  overflow: hidden;              /* 스크롤바 숨김 */
-  border-radius: 10px;
-}
-/* 직전 문장(회색) */
-.msg-prev{
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: calc(50% - 88px);         /* 중앙보다 약간 위 */
-  transform: translateY(-50%);
-  background: #f7f3ee;
-  color: #777;
-  border: 1px dashed rgba(0,0,0,.08);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.6;
-  opacity: .9;
-}
-/* 현재 문장(주황, 정중앙) */
-.msg-current{
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #ff9844;
-  color: #fff;
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: 0 8px 20px rgba(235,135,78,.35);
-  line-height: 1.65;
-  font-weight: 700;
-
+.card pre {
   white-space: pre-wrap;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-/* 아이콘 간격 */
-.msg-current .bullet,
-.msg-prev .bullet {
-  margin-right: 8px;
-  font-size: 16px;
-}
-
-/* 안전핀: 이미지/비디오가 카드 밖으로 새지 않도록 */
-.complete-page img,
-.complete-page video {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* ===== ✅ 하단 텍스트 링크( CleanupExplain 이동 ) ===== */
-.cleanup-row{
-  width: 100%;
-  max-width: 430px;
-  display: flex;
-  justify-content: flex-end;         /* 오른쪽 정렬 (참고 스샷처럼) */
-  padding: 6px 2px 0;
-}
-.cleanup-link{
-  background: transparent;
-  border: 0;
-  color: #ff914d;                    /* 브랜드 주황 */
-  font-weight: 800;
+  word-break: break-word;
   font-size: 14px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  color: #333;
+  line-height: 1.5;
 }
-.cleanup-link:hover{
-  text-decoration: underline;
-  filter: brightness(0.95);
-}
+
+/* ===== 안전핀: 이미지/비디오가 카드 밖으로 새지 않도록 ===== */
+.complete-page img,
+.complete-page video { max-width: 100%; height: auto; display: block; }
