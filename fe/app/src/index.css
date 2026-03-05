@@ -1,8 +1,5 @@
 /* src/index.css */
 
-/* 폰트 임포트 */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-
 /* 바깥 배경 */
 html, body, #root {
   margin: 0; padding: 0;
@@ -37,45 +34,20 @@ html, body, #root {
 }
 
 /* 혜란 글씨체 추가*/
-@font-face {
-  font-family: 'omyu_pretty';
-  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2') format('woff2');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
 
+@font-face {
+    font-family: 'omyu_pretty';
+    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2304-01@1.0/omyu_pretty.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
 /* 전체 기본 폰트 적용 */
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Noto Sans KR', system-ui, -apple-system, 'Segoe UI', Roboto,
-               'Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', sans-serif;
+  font-family: 'omyu_pretty', sans-serif;
 }
 
 button {
-  font-family: 'Noto Sans KR', system-ui, -apple-system, 'Segoe UI', Roboto,
-               'Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', sans-serif;
-}
-
-/* === Global Font Override (모든 페이지 강제 적용) === */
-:root {
-  --font-ui: 'Noto Sans KR', system-ui, -apple-system, 'Segoe UI', Roboto,
-             'Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', sans-serif;
-}
-
-/* 대부분의 요소에 강제 적용 (하드코딩된 font-family까지 덮어씀) */
-*:where(:not(code, kbd, samp, pre, svg, svg *)) {
-  font-family: var(--font-ui) !important;
-}
-
-/* 폼 컨트롤도 상속 받게 강제 */
-button, input, textarea, select {
-  font-family: inherit !important;
-}
-
-/* 플레이스홀더까지 통일(선택) */
-input::placeholder,
-textarea::placeholder {
-  font-family: inherit;
+  font-family: 'omyu_pretty', sans-serif;
 }

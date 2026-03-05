@@ -191,6 +191,7 @@ def seed_videos():
 
                     recipe_step = RecipeStep(
                         recipe_id=row["recipe_id"],
+                        text=row["text"],
                         step=row["step"],
                         url=row["url"]
                     )

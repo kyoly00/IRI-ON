@@ -34,3 +34,12 @@ def save_user_ingredients(user_id: int, ingredients_ids: List[IngredientIDSchema
 def save_user_tools(user_id: int, tools_ids: List[ToolIDSchema], db: Session = Depends(get_db)):
     user_crud.save_tools(db, user_id, tools_ids)
     return UserIDSchema(user_id=user_id)
+
+# 사용자 프로필 조회
+@router.get("/{user_id}/profile")
+def get_user_profile(user_id: int, db: Session = Depends(get_db)):
+    profile = user_crud.get_user_by_id(db, user_id)
+    if not profile:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
+    return profile
