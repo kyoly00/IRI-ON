@@ -72,28 +72,27 @@ async def get_session_info(
     else:
         recipe_steps_text = getattr(recipe, "instructions", "") or "레시피 단계 정보가 없습니다."
 
-    system_prompt = f"""
-        너는 "셰프얌"이라는 이름의 아동을 위한 친절한 단계별 요리 보조 AI야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
+    system_prompt = f"""너는 아동을 위한 친절한 요리 보조 AI "셰프얌"이야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
+    ### 단계 진행 규칙
+    1. 사용자가 여러 단계를 이미 완료했다고 말하면 해당 단계들을 모두 완료한 것으로 인정하고, 다음 해야 할 단계로 바로 넘어가.
+    예) "손 씻고 도구도 준비해왔어" → 1, 2단계 완료로 인정 후 3단계 안내
+    예) "불 켜고 기름도 뒀어" → 6, 7단계 완료로 인정 후 8단계 안내
+    2. 사용자가 현재 단계보다 앞선 단계를 이미 했다고 하면 그대로 인정하고 이후 단계를 안내해. 단계 순서에 과하게 집착하지 마.
+    3. 현재 단계에 대한 추가 설명(타이머, 팁, 대체재료 등)을 줄 때는 다음 단계를 먼저 말하지 마.
+    4. 사용자가 재료를 쿠팡에서 구매하길 원하면 open_coupang 도구를 호출해서 검색 페이지를 열어줘.
+    5. 사용자가 요리나 식재료의 영양 정보(칼로리, 탄수화물, 지방, 단백질 등)를 물어보면 searchFoodNutrition 도구를 사용하여 정확한 정보를 검색 후 친절하게 알려줘.
 
-        ### 최우선 규칙 (위배하면 안 됨)
-        1. 사용자가 "다 했어", "완료", "다음", "다음 단계 알려줘" 같이 **완료를 의미하는 말**을 하기 전에는 절대로 다음 단계로 넘어가지 마.
-        2. 타이머, 재료 대체 같은 **추가 도움**을 줄 때도, 새로운 조리 단계(예: “이제 새우를 넣어”)를 먼저 말하지 말고, 현재 단계에 대한 설명만 보완해.
+    오늘 만들 요리: {user_profile["menu"]}
+    사용할 재료: {ingredients_text}
+    사용할 조리도구: {tools_text}
+    알레르기: {user_profile["allergy"]}
+    요리 단계:
+        {recipe_steps_text}
+    ### 답변 규칙
+    - 한 번에 단계 하나만 말해. 여러 단계를 한 문단에 몰아서 말하지 마.
+    - 각 단계 끝에는 "준비되면 말해줘."라고 항상 짧게 물어봐."""
 
-        이 규칙은 아래에 나오는 요리 정보나 말투 규칙보다 항상 우선이야.
 
-        오늘 만들 요리: {user_profile["menu"]}
-        사용할 재료: {ingredients_text}
-        사용할 조리도구: {tools_text}
-        알레르기: {user_profile["allergy"]}
-
-        요리 단계:
-            {recipe_steps_text}
-
-        ### 단계 설명 규칙
-        한 번에 **단계 하나만** 말해. 여러 단계를 한 문단에 몰아서 말하지 마.
-        각 단계 끝에는 "준비되면 말해줘."라고 항상 짧게 물어봐.   
-        """
-    
     return {
         "system_prompt": system_prompt.strip(),
         "user_profile": user_profile,
@@ -105,7 +104,7 @@ async def get_session_info(
 class RealtimeSessionRequest(BaseModel):
     """프론트에서 요청하는 모델/보이스/맞춤 인스트럭션 정보."""
 
-    model: str = "gpt-realtime-mini"
+    model: str = "gpt-4o-mini-realtime-preview"
     voice: str = "ash"
     instructions: Optional[str] = None
     tools: Optional[List[Dict[str, Any]]] = None  # 프론트엔드에서 전달받은 툴 정의
@@ -140,7 +139,16 @@ async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dic
         "model": payload.model,
         "voice": payload.voice or "ash",
         "modalities": ["text", "audio"],
-        "input_audio_transcription": {"model": "whisper-1"},
+        "input_audio_transcription": {
+            "model": "whisper-1",
+            "language": "ko",  # 한국어 고정 - 배경 소음을 영어/일본어로 오인식 방지
+        },
+        "turn_detection": {
+            "type": "server_vad",
+            "threshold": 0.85,           # 기본값 0.5 → 높일수록 발화 감지 덜 민감 (배경음 무시)
+            "prefix_padding_ms": 300,   # 발화 시작 전 여백
+            "silence_duration_ms": 700, # 침묵 700ms 후 발화 종료로 판단 (기본 500ms보다 여유)
+        },
         "instructions": payload.instructions or "",
         "tools": tools,
         "tool_choice": "auto",
@@ -361,6 +369,80 @@ async def mcp_web_search(request: WebSearchRequest) -> Dict[str, Any]:
             "query": request.query,
             "error": str(e),
             "results": [],
+        }
+
+
+# --------- Coupang 쇼핑 도구 (Selenium 기반) ---------
+class OpenCoupangRequest(BaseModel):
+    """쿠팡 검색 요청."""
+    query: str  # 검색할 재료/상품명
+
+
+@router.post("/mcp/tools/open_coupang")
+async def mcp_open_coupang(request: OpenCoupangRequest) -> Dict[str, Any]:
+    """
+    Selenium을 사용하여 쿠팡에서 재료를 검색합니다.
+    브라우저를 열어 쿠팡 검색 결과 페이지로 이동합니다.
+    """
+    from services.coupang_service import open_coupang_search
+    
+    try:
+        result = await open_coupang_search(request.query)
+        print(f"🛒 [Coupang] 검색: {request.query}")
+        return result
+    except Exception as e:
+        print(f"❌ [Coupang] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "query": request.query,
+            "error": str(e),
+            "message": f"쿠팡 검색 중 오류가 발생했어. 직접 쿠팡에서 '{request.query}'를 검색해봐.",
+        }
+
+
+# --------- Food Nutrition MCP Tool (k-mfds-fooddb) ---------
+class SearchFoodNutritionRequest(BaseModel):
+    foodNameKr: Optional[str] = None
+    makerName: Optional[str] = None
+    foodCategory1Name: Optional[str] = None
+    pageNo: Optional[int] = 1
+    numOfRows: Optional[int] = 5
+
+@router.post("/mcp/tools/search_food_nutrition")
+async def mcp_search_food_nutrition(request: SearchFoodNutritionRequest) -> Dict[str, Any]:
+    """
+    식약처 영양성분 DB를 검색합니다.
+    """
+    from services.mcp_clients_manager import get_mcp_manager
+    
+    try:
+        manager = await get_mcp_manager()
+        result = await manager.tool_call(
+            server_id="k-mfds-fooddb",
+            tool_name="searchFoodNutrition",
+            arguments={
+                "foodNameKr": request.foodNameKr,
+                "makerName": request.makerName,
+                "foodCategory1Name": request.foodCategory1Name,
+                "pageNo": request.pageNo or 1,
+                "numOfRows": request.numOfRows or 5,
+            }
+        )
+        print(f"🥦 [Nutrition] 검색: {request.foodNameKr or request.foodCategory1Name or '전체'}")
+        return {
+            "success": True,
+            **result
+        }
+    except Exception as e:
+        print(f"❌ [Nutrition] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "content": []
         }
 
 

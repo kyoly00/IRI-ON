@@ -1,11 +1,19 @@
 # 환경변수 파일
 be/.env
+fe/app/.env
 
 # 데이터 폴더
 be/data/
+
+# 로그 폴더
+be/conversation_logs/
+
+# md 파일
+*.md
 
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+

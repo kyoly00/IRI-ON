@@ -115,6 +115,7 @@ class MCPClientsManager:
     
     def _parse_server_config(self, config: Dict[str, Any]) -> MCPServerConfig:
         """Parse server config dict to MCPServerConfig."""
+        import os
         if "command" in config:
             # Stdio transport
             command = config.get("command", "")
@@ -126,10 +127,21 @@ class MCPClientsManager:
                 command = parts[0]
                 args = parts[1:] + args
             
+            # Environment variables handling
+            env = dict(os.environ)
+            config_env = config.get("env")
+            if config_env:
+                for k, v in config_env.items():
+                    if isinstance(v, str) and v.startswith("$"):
+                        env_var_name = v[1:]
+                        env[k] = os.getenv(env_var_name, "")
+                    else:
+                        env[k] = str(v)
+            
             return MCPServerConfig(
                 command=command,
                 args=args,
-                env=config.get("env")
+                env=env
             )
         elif "url" in config:
             # HTTP transport

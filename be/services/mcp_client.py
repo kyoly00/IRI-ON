@@ -74,6 +74,7 @@ class MCPClient:
         self._error: Optional[str] = None
         self._tool_info: List[MCPToolInfo] = []
         self._lock = asyncio.Lock()
+        self.exit_stack = None
     
     @property
     def status(self) -> MCPClientStatus:
@@ -137,6 +138,7 @@ class MCPClient:
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
+            from contextlib import AsyncExitStack
             
             server_params = StdioServerParameters(
                 command=self.config.command,
@@ -144,10 +146,11 @@ class MCPClient:
                 env=self.config.env,
             )
             
-            self._transport = await stdio_client(server_params).__aenter__()
+            self.exit_stack = AsyncExitStack()
+            
+            self._transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
             read, write = self._transport
-            self._client = ClientSession(read, write)
-            await self._client.__aenter__()
+            self._client = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await self._client.initialize()
             
         except ImportError:
@@ -161,14 +164,15 @@ class MCPClient:
         try:
             from mcp import ClientSession
             from mcp.client.sse import sse_client
+            from contextlib import AsyncExitStack
             
-            self._transport = await sse_client(
-                self.config.url,
-                headers=self.config.headers
-            ).__aenter__()
+            self.exit_stack = AsyncExitStack()
+            
+            self._transport = await self.exit_stack.enter_async_context(
+                sse_client(self.config.url, headers=self.config.headers)
+            )
             read, write = self._transport
-            self._client = ClientSession(read, write)
-            await self._client.__aenter__()
+            self._client = await self.exit_stack.enter_async_context(ClientSession(read, write))
             await self._client.initialize()
             
         except ImportError:
@@ -234,17 +238,16 @@ class MCPClient:
     async def disconnect(self):
         """Disconnect from MCP server."""
         async with self._lock:
-            if self._client:
+            if hasattr(self, 'exit_stack') and self.exit_stack:
                 try:
-                    if hasattr(self._client, '__aexit__'):
-                        await self._client.__aexit__(None, None, None)
-                    if self._transport and hasattr(self._transport, '__aexit__'):
-                        await self._transport.__aexit__(None, None, None)
+                    await self.exit_stack.aclose()
                 except Exception as e:
                     logger.warning(f"[{self.name}] Error during disconnect: {e}")
                 finally:
-                    self._client = None
-                    self._transport = None
+                    self.exit_stack = None
+            
+            self._client = None
+            self._transport = None
             
             self._status = MCPClientStatus.DISCONNECTED
             logger.info(f"[{self.name}] Disconnected from MCP server")
