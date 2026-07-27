@@ -1,4 +1,4 @@
-<img width="1002" height="8003" alt="ChefYam 패기5 우리" src="https://github.com/user-attachments/assets/cd5ebb1c-0a3d-4513-84cb-8954a0858a63" />
+<img width="2400" height="8003" alt="ChefYam 패기5 우리" src="https://github.com/user-attachments/assets/cd5ebb1c-0a3d-4513-84cb-8954a0858a63" />
 
 # 🚀 프로젝트 실행 가이드
 이 문서는 로컬 환경에서 백엔드(FastAPI)와 프론트엔드(Vite) 프로젝트를 실행하는 방법을 단계별로 안내합니다.
