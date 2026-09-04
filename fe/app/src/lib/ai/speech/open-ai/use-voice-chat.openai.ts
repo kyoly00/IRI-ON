@@ -71,7 +71,7 @@ const createUIMessage = (payload: {
 export function useOpenAIVoiceChat(
   props?: VoiceChatOptions,
 ): VoiceChatSession {
-  const { model = "gpt-realtime-mini", voice = "ash" } = props || {};
+  const { model = "gpt-realtime-2.1-mini", voice = "ash" } = props || {};
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isAssistantSpeaking, setIsAssistantSpeaking] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -869,7 +869,10 @@ export function useOpenAIVoiceChat(
     setMessages([]);
     try {
       const session = await createSession();
-      const sessionToken = session.client_secret.value;
+      const sessionToken = (session as any).value || session.client_secret?.value;
+      if (!sessionToken) {
+        throw new Error("Failed to obtain ephemeral session token from backend");
+      }
 
       // 대화 로그 세션 시작 (시스템 프롬프트 포함)
       await startConversationLog(sessionInfo?.system_prompt);
@@ -938,7 +941,13 @@ export function useOpenAIVoiceChat(
       });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime`, {
+
+      if (!offer.sdp) {
+        throw new Error("Failed to generate WebRTC SDP offer");
+      }
+
+      // 최신 OpenAI Realtime WebRTC calls 엔드포인트로 SDP 교환 (실패 시 기본 엔드포인트 폴백)
+      let sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
         body: offer.sdp,
         headers: {
@@ -946,6 +955,22 @@ export function useOpenAIVoiceChat(
           "Content-Type": "application/sdp",
         },
       });
+
+      if (!sdpResponse.ok) {
+        sdpResponse = await fetch("https://api.openai.com/v1/realtime", {
+          method: "POST",
+          body: offer.sdp,
+          headers: {
+            Authorization: `Bearer ${sessionToken}`,
+            "Content-Type": "application/sdp",
+          },
+        });
+      }
+
+      if (!sdpResponse.ok) {
+        throw new Error(`WebRTC SDP exchange failed: ${sdpResponse.status} ${await sdpResponse.text()}`);
+      }
+
       const answer: RTCSessionDescriptionInit = {
         type: "answer",
         sdp: await sdpResponse.text(),

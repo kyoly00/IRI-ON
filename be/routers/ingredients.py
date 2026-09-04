@@ -9,7 +9,9 @@ from schemas.ingredient_schema import IngredientSchema
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
 # 전체 재료 조회
+@router.get("", response_model=List[IngredientSchema])
 @router.get("/", response_model=List[IngredientSchema])
 def get_all_ingredients(db: Session = Depends(get_db)):
     ingredients = domain_crud.get_all_ingredients(db)
     return ingredients
+
