@@ -106,6 +106,15 @@ export default function CookingExplain() {
     (event) => {
       if (event.type === "video") {
         setCurrentStep(selectStepFromEvent(event));
+      } else if (event.type === "navigate_step") {
+        if (event.action === "next") {
+          setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
+        } else if (event.action === "prev") {
+          setCurrentStep((s) => Math.max(s - 1, 0));
+        } else if (event.action === "set" && Number.isFinite(event.targetStep)) {
+          const idx = Math.max(0, Math.min(steps.length - 1, Number(event.targetStep) - 1));
+          setCurrentStep(idx);
+        }
       }
     },
     [selectStepFromEvent],

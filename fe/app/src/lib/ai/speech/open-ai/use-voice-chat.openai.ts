@@ -578,6 +578,23 @@ export function useOpenAIVoiceChat(
               await stop();
               setMessages([]);
               break;
+            case "navigate_cooking_step": {
+              const action = toolArgs?.action || "next";
+              const targetStep = toolArgs?.target_step;
+              console.log(`🎬 [Video Navigation] action=${action}, target_step=${targetStep}`);
+              props?.onAssistantEvent?.({
+                type: "navigate_step",
+                action,
+                targetStep,
+              });
+              toolResult = {
+                success: true,
+                action,
+                target_step: targetStep,
+                message: `요리 영상 단계를 ${action === 'set' ? `${targetStep}단계로` : action === 'next' ? '다음 단계로' : '이전 단계로'} 이동했습니다.`,
+              };
+              break;
+            }
             default:
               break;
           }
