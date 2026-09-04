@@ -30,6 +30,32 @@
         "properties": {},
         "required": []
       }
+    },
+    {
+      "type": "function",
+      "name": "navigate_cooking_step",
+      "description": "요리 영상 및 단계를 이동합니다. 사용자가 다음/이전 단계로 넘어가길 원하거나 특정 단계(예: 3단계) 영상을 요청할 때, 혹은 요리 다음 단계를 안내할 때 호출합니다.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "next",
+              "prev",
+              "set"
+            ],
+            "description": "이동 동작: 다음 단계로 이동('next'), 이전 단계로 이동('prev'), 특정 단계로 지정 이동('set')"
+          },
+          "target_step": {
+            "type": "integer",
+            "description": "action이 'set'일 때 이동할 목표 요리 단계 번호 (1부터 시작)"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
     }
   ],
   "mcpTools": [

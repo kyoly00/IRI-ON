@@ -47,6 +47,11 @@ export type AssistantBridgeEvent =
     step: number;
   }
   | {
+    type: "navigate_step";
+    action: "next" | "prev" | "set";
+    targetStep?: number;
+  }
+  | {
     // catch-all (ACK 등)
     type: string;
     [key: string]: any;
