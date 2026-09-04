@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Welcome2.css";
 import baby from "../../assets/baby.png";
+import { api } from "../../lib/api";
 
 export default function Welcome2() {
   const nav = useNavigate();
@@ -41,7 +42,7 @@ export default function Welcome2() {
   useEffect(() => {
     const fetchTools = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/tools");
+        const res = await fetch(api("/tools"));
         if (!res.ok) throw new Error("도구 불러오기 실패");
         const data = await res.json();
         setToolsList(data); // [{tool_id:1, name:"에어프라이어"}, ...]
@@ -95,7 +96,7 @@ export default function Welcome2() {
       };
 
       const res1 = await fetch(
-        `http://127.0.0.1:8000/users/profile?user_id=${userId}`,
+        api(`/users/profile?user_id=${userId}`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -108,7 +109,7 @@ export default function Welcome2() {
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
 
       const res2 = await fetch(
-        `http://127.0.0.1:8000/users/tools?user_id=${userId}`,
+        api(`/users/tools?user_id=${userId}`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

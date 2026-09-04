@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, List, Dict, Optional
 from dotenv import load_dotenv
 
+import httpx
 import requests
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -104,70 +105,117 @@ async def get_session_info(
 class RealtimeSessionRequest(BaseModel):
     """프론트에서 요청하는 모델/보이스/맞춤 인스트럭션 정보."""
 
-    model: str = "gpt-4o-mini-realtime-preview"
+    model: str = "gpt-realtime-2.1-mini"
     voice: str = "ash"
     instructions: Optional[str] = None
     tools: Optional[List[Dict[str, Any]]] = None  # 프론트엔드에서 전달받은 툴 정의
 
 @router.post("/openai-realtime/session")
 async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dict[str, Any]:
-    """Step 2. 브라우저가 WebRTC 제안을 만들기 전에 에페메럴 토큰을 발급받는다.
-    
-    If tools are not provided by frontend, loads tools from MCPClientsManager.
+    """
+    OpenAI Realtime WebRTC용 ephemeral client secret 발급.
+
+    Frontend에서 tools를 전달하지 않은 경우
+    MCPClientsManager에서 OpenAI function tool 형식으로 가져옵니다.
     """
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
 
-    # 프론트엔드에서 전달받은 툴 사용 (없으면 MCP 매니저에서 로드)
+    # 1. Tools
     tools = payload.tools if payload.tools else []
-    
-    # If no tools provided, try to load from MCP manager
     if not tools:
         try:
             from services.mcp_clients_manager import get_mcp_manager
             manager = await get_mcp_manager()
-            mcp_tools = await manager.tools_for_openai()
-            tools = mcp_tools
-            print(f"📋 [Session] Loaded {len(tools)} tools from MCP manager")
+            tools = await manager.tools_for_openai()
+            print(f"📋 [Realtime Session] Loaded {len(tools)} tools from MCP manager")
         except Exception as e:
-            print(f"⚠️ [Session] Failed to load MCP tools: {e}")
+            print(f"⚠️ [Realtime Session] Failed to load MCP tools: {e}")
             tools = []
 
-    body = {
-        "model": payload.model,
-        "voice": payload.voice or "ash",
-        "modalities": ["text", "audio"],
-        "input_audio_transcription": {
-            "model": "whisper-1",
-            "language": "ko",  # 한국어 고정 - 배경 소음을 영어/일본어로 오인식 방지
-        },
-        "turn_detection": {
-            "type": "server_vad",
-            "threshold": 0.85,           # 기본값 0.5 → 높일수록 발화 감지 덜 민감 (배경음 무시)
-            "prefix_padding_ms": 300,   # 발화 시작 전 여백
-            "silence_duration_ms": 700, # 침묵 700ms 후 발화 종료로 판단 (기본 500ms보다 여유)
-        },
+    # 2. Model
+    model_name = payload.model or "gpt-realtime-2.1-mini"
+
+    # 3. Current Realtime session configuration
+    session: Dict[str, Any] = {
+        "type": "realtime",
+        "model": model_name,
+        "output_modalities": ["audio"],
         "instructions": payload.instructions or "",
-        "tools": tools,
-        "tool_choice": "auto",
+        "audio": {
+            "input": {
+                "transcription": {
+                    "model": "gpt-4o-mini-transcribe",
+                    "language": "ko",
+                    "prompt": (
+                        "사용자는 한국어로 말합니다. "
+                        "주변의 영어, 일본어 또는 배경 소음을 "
+                        "사용자 발화로 오인하지 마세요."
+                    ),
+                },
+                "noise_reduction": {
+                    "type": "far_field",
+                },
+                "turn_detection": {
+                    "type": "server_vad",
+                    "threshold": 0.85,           # 기본값 0.5 → 높일수록 발화 감지 덜 민감 (배경음 무시)
+                    "prefix_padding_ms": 300,   # 발화 시작 전 여백
+                    "silence_duration_ms": 700, # 침묵 700ms 후 발화 종료로 판단 (기본 500ms보다 여유)
+                    "create_response": True,
+                    "interrupt_response": True,
+                },
+            },
+            "output": {
+                "voice": payload.voice or "ash",
+            },
+        },
     }
 
-    response = requests.post(
-        "https://api.openai.com/v1/realtime/sessions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=body,
-        timeout=30,
-    )
-    if response.status_code >= 400:
-        raise HTTPException(status_code=response.status_code, detail=response.text)
+    # 4. Tools
+    if tools:
+        session["tools"] = tools
+        session["tool_choice"] = "auto"
 
-    session = response.json()
-    return session
+    body: Dict[str, Any] = {
+        "session": session
+    }
+
+    # 5. Headers
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    # 6. Create ephemeral client secret
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers=headers,
+                json=body,
+            )
+    except httpx.RequestError as e:
+        print(f"❌ [Realtime Connection Error] {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to connect to OpenAI Realtime API: {str(e)}",
+        )
+
+    # 7. Error handling & response
+    if response.status_code >= 400:
+        print(f"❌ [Realtime Client Secret Error] Status {response.status_code}: {response.text}")
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=response.text,
+        )
+
+    result = response.json()
+    session = result.get("session", {})
+    print(f"✅ [Realtime Client Secret Created] Model={model_name}, Session ID={session.get('id')}")
+
+    return result
 
 # --------- MCP Tool 엔드포인트 ---------
 class StartTimerRequest(BaseModel):
