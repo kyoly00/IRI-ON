@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 import time
 import queue
+import asyncio
 import webrtcvad  # VAD 라이브러리 추가
 from collections import deque  # 큐 대신 덱(Deque) 사용
 from dotenv import load_dotenv
@@ -87,7 +88,8 @@ user_profile = {
 
 
 # OpenAI 클라이언트 초기화 
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)  # STT 및 LLM(GPT)용 통합 클라이언트
+openai_client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)  # LLM(GPT)용 비동기 클라이언트
+sync_openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)  # STT 및 일반 통신을 위한 동기 클라이언트
 
 
 # --- 시스템 프롬프트 ---
@@ -139,7 +141,8 @@ messages = [{"role": "system", "content": initial_prompt}]
 
 
 # --- 실시간 오디오 처리 관련 전역 변수 ---
-turn_queue = queue.Queue()  # 완성된 사용자 발화를 저장하는 큐
+async_turn_queue = None     # 완성된 사용자 발화를 저장하는 asyncio.Queue (main 루프에서 초기화)
+main_loop = None            # 메인 이벤트 루프 참조
 stt_queue = queue.Queue()   # Whisper 통신용 큐
 stop_tts_event = threading.Event()  # TTS 재생 중단 이벤트
 tts_playing = False         # TTS 재생 상태
@@ -157,7 +160,7 @@ def record_callback(indata, frames, time, status):
 
 def send_to_whisper_api(pcm_chunk):
     """PCM 바이트를 WAV 형태로 메모리에서 변환 후 OpenAI API로 전송"""
-    global openai_client
+    global sync_openai_client
     stt_start_time = time.perf_counter()
     print("⏳ [STT 요청 시작] OpenAI Whisper API로 전체 음성 전송 중...", end=" ", flush=True)
 
@@ -171,7 +174,7 @@ def send_to_whisper_api(pcm_chunk):
     wav_io.name = "chunk.wav"
 
     try:
-        response = openai_client.audio.transcriptions.create(
+        response = sync_openai_client.audio.transcriptions.create(
             model="whisper-1",
             file=wav_io,
             language="ko",
@@ -239,6 +242,7 @@ def process_audio_stream():
 
 def stt_worker():
     """별도의 스레드에서 API 통신만 전담하여 VAD 버퍼 처리를 방해하지 않음"""
+    global main_loop, async_turn_queue
     while True:
         chunk = stt_queue.get()
         if chunk is None:
@@ -250,26 +254,136 @@ def stt_worker():
 
         if full_text:
             print(f"✅ [전체 텍스트 변환 완료] ({stt_latency:.2f}초 소요)\n  -> 최종 텍스트: '{full_text}'")
-            turn_queue.put(full_text)
+            if main_loop and async_turn_queue:
+                main_loop.call_soon_threadsafe(async_turn_queue.put_nowait, full_text)
         else:
             print("⚠️ [STT 결과 없음]")
 
 
 
+# --- Tool Definitions ---
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_recipe",
+            "description": "사용자의 나이와 알레르기를 고려하여 적합한 레시피를 검색합니다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "검색할 레시피 이름 또는 재료",
+                    }
+                },
+                "required": ["query"],
+            },
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_nutrition_info",
+            "description": "주어진 재료나 음식의 영양 정보를 검색합니다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "food_name": {
+                        "type": "string",
+                        "description": "영양 정보를 확인할 음식 이름",
+                    }
+                },
+                "required": ["food_name"],
+            },
+        }
+    }
+]
+
+async def search_recipe(query: str):
+    print(f"🔍 [Tool] search_recipe 호출됨: query={query}")
+    await asyncio.sleep(0.5) # MCP 호출 지연 시뮬레이션
+    return json.dumps({"result": f"'{query}'에 대한 어린이 맞춤 레시피(알레르기 안전)를 찾았습니다."})
+
+async def get_nutrition_info(food_name: str):
+    print(f"🥦 [Tool] get_nutrition_info 호출됨: food_name={food_name}")
+    await asyncio.sleep(0.5) # MCP 호출 지연 시뮬레이션
+    return json.dumps({"result": f"'{food_name}'의 영양 정보: 건강에 매우 좋은 식재료입니다."})
+
+available_functions = {
+    "search_recipe": search_recipe,
+    "get_nutrition_info": get_nutrition_info,
+}
+
 # --- LLM 대화 + 시간 측정 ---
-def chat_with_ai():
-    global messages, metrics, openai_client
+async def chat_with_ai_async():
+    global messages, metrics, openai_client, tools
     try:
         print("⏳ [LLM 요청 시작] OpenAI GPT-4o-mini 모델에 대화 전송 중...", flush=True)
         start = time.perf_counter()
-        completion = openai_client.chat.completions.create(
+        
+        completion = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
+            tools=tools,
+            tool_choice="auto"
         )
         end = time.perf_counter()
         latency_ms = (end - start) * 1000.0
         
         print(f"✅ [LLM 응답 완료] ({latency_ms/1000.0:.2f}초 소요)")
+
+        response_message = completion.choices[0].message
+        messages.append(response_message)
+        
+        # Tool Calls 확인 및 병렬 처리
+        if response_message.tool_calls:
+            print("🔧 [Tool] Tool call 감지됨, 병렬 Task 실행 시작...")
+            tasks = []
+            tool_call_ids = []
+            
+            for tool_call in response_message.tool_calls:
+                func_name = tool_call.function.name
+                func_args = json.loads(tool_call.function.arguments)
+                func_to_call = available_functions.get(func_name)
+                
+                if func_to_call:
+                    tasks.append(func_to_call(**func_args))
+                    tool_call_ids.append((tool_call.id, func_name))
+            
+            # 병렬 실행 (gather)
+            task_start_time = time.perf_counter()
+            tool_results = await asyncio.gather(*tasks)
+            task_end_time = time.perf_counter()
+            metrics["task_parallel_latency_s"].append(task_end_time - task_start_time)
+            print(f"⚡ [Tool] 병렬 실행 완료 ({task_end_time - task_start_time:.2f}초 소요)")
+            
+            # 결과를 메시지에 추가
+            for (tool_call_id, func_name), result in zip(tool_call_ids, tool_results):
+                messages.append({
+                    "tool_call_id": tool_call_id,
+                    "role": "tool",
+                    "name": func_name,
+                    "content": result,
+                })
+            
+            # LLM에 두 번째 요청 (최종 답변 생성)
+            print("⏳ [LLM 2차 요청 시작] Tool 결과 포함하여 최종 답변 요청 중...", flush=True)
+            second_start = time.perf_counter()
+            second_response = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+            )
+            second_end = time.perf_counter()
+            second_latency_ms = (second_end - second_start) * 1000.0
+            print(f"✅ [LLM 2차 응답 완료] ({second_latency_ms/1000.0:.2f}초 소요)")
+            
+            second_message = second_response.choices[0].message
+            messages.append(second_message)
+            ai_msg = second_message.content
+            
+            latency_ms += second_latency_ms
+        else:
+            ai_msg = response_message.content
 
         if not metrics["first_response_done"]:
             metrics["ttft_ms"] = latency_ms
@@ -277,9 +391,10 @@ def chat_with_ai():
         else:
             metrics["turn_latencies_ms"].append(latency_ms)
 
-        ai_msg = completion.choices[0].message.content
         return ai_msg
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"❌ [LLM 호출 예외 발생] {e}")
         return "AI 응답 중 문제가 발생했습니다."
 
@@ -429,14 +544,19 @@ class TurnDetector:
 
 
 # --- 메인 루프 ---
-if __name__ == "__main__":
+async def main():
+    global messages, turn_detector, is_recording_active, main_loop, async_turn_queue
+    
+    main_loop = asyncio.get_running_loop()
+    async_turn_queue = asyncio.Queue()
+    
     print("🤖 아동용 요리 보조 AI가 준비되었습니다! 오늘의 요리를 시작할게요!")
 
     try:
         # 첫 번째 호출 (TTFT 측정 포함)
-        ai_response = chat_with_ai()
+        ai_response = await chat_with_ai_async()
         print(f"🤖 AI: {ai_response}")
-        tts_skt(ai_response)
+        await asyncio.to_thread(tts_skt, ai_response)
 
         # 여유로운 침묵 대기(1500ms) 및 현실적인 에너지 임계값(50) 설정
         turn_detector = TurnDetector(sample_rate=SAMPLE_RATE, max_silence_ms=1500, energy_threshold=50)
@@ -462,7 +582,7 @@ if __name__ == "__main__":
 
         while True:
             # 사용자의 발화가 완료될 때까지 대기
-            user_input = turn_queue.get() 
+            user_input = await async_turn_queue.get() 
             print(f"👦 사용자: {user_input}")
 
             if not user_input or user_input.isspace():
@@ -477,14 +597,16 @@ if __name__ == "__main__":
             
             # 사용자 발화에 의해 이전에 진행되던 작업이 있다면 초기화 (TTS는 이미 VAD에서 중지됨)
             
-            ai_response = chat_with_ai()
-            messages.append({"role": "assistant", "content": ai_response})
+            ai_response = await chat_with_ai_async()
+            # `chat_with_ai_async` 내부에서 assistant 메시지가 이미 messages에 추가됨.
 
             print(f"🤖 AI: {ai_response}")
-            tts_skt(ai_response)
+            await asyncio.to_thread(tts_skt, ai_response)
             
             print("🎙️ 실시간 녹음 중입니다. 말씀하세요...")
 
+    except asyncio.CancelledError:
+        print("\n비동기 루프 취소로 종료되었습니다.")
     except KeyboardInterrupt:
         print("\n사용자에 의해 종료되었습니다.")
     finally:
@@ -493,3 +615,9 @@ if __name__ == "__main__":
             stream.close()
         # 루프를 빠져나가거나 예외가 발생해도 metrics 출력
         print_metrics_summary()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

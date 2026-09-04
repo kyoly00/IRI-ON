@@ -756,3 +756,75 @@ async def get_conversation_session(filename: str) -> Dict[str, Any]:
         "success": True,
         "session": session_data,
     }
+
+
+# --------- Voice AI 평가지표(Metrics) 기록 및 조회 API ---------
+class RecordTurnMetricsRequest(BaseModel):
+    """단일 턴의 성능 지표 기록 요청."""
+    session_id: str
+    turn_id: Optional[int] = None
+    user_speech_start_ts: Optional[float] = None
+    user_speech_end_ts: Optional[float] = None
+    stt_completed_ts: Optional[float] = None
+    first_token_ts: Optional[float] = None
+    first_audio_ts: Optional[float] = None
+    response_completed_ts: Optional[float] = None
+    interruption_ts: Optional[float] = None
+    interruption_stopped_ts: Optional[float] = None
+    user_audio_duration_ms: Optional[float] = None
+    agent_audio_duration_ms: Optional[float] = None
+    input_tokens: Optional[int] = 0
+    output_tokens: Optional[int] = 0
+    user_transcript: Optional[str] = None
+    agent_response: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+
+
+@router.post("/conversation-log/turn-metrics")
+async def record_turn_metrics(request: RecordTurnMetricsRequest) -> Dict[str, Any]:
+    """프론트엔드 또는 음성 파이프라인에서 측정된 단일 턴의 세부 지표를 기록합니다."""
+    logger = get_conversation_logger()
+    tracker = logger.get_metrics_tracker(request.session_id)
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Active session not found")
+    
+    from services.voice_metrics import TurnMetrics
+    turn = TurnMetrics(
+        turn_id=request.turn_id or (len(tracker.turns) + 1),
+        user_speech_start_ts=request.user_speech_start_ts,
+        user_speech_end_ts=request.user_speech_end_ts,
+        stt_completed_ts=request.stt_completed_ts,
+        first_token_ts=request.first_token_ts,
+        first_audio_ts=request.first_audio_ts,
+        response_completed_ts=request.response_completed_ts,
+        interruption_ts=request.interruption_ts,
+        interruption_stopped_ts=request.interruption_stopped_ts,
+        user_audio_duration_ms=request.user_audio_duration_ms,
+        agent_audio_duration_ms=request.agent_audio_duration_ms,
+        input_tokens=request.input_tokens or 0,
+        output_tokens=request.output_tokens or 0,
+        user_transcript=request.user_transcript,
+        agent_response=request.agent_response,
+        tool_calls=request.tool_calls or [],
+    )
+    tracker.turns.append(turn)
+    
+    return {
+        "success": True,
+        "turn": turn.to_dict(),
+    }
+
+
+@router.get("/conversation-log/metrics-summary/{session_id}")
+async def get_session_metrics_summary(session_id: str) -> Dict[str, Any]:
+    """활성 세션의 실시간 평가지표 요약을 계산하여 반환합니다."""
+    logger = get_conversation_logger()
+    tracker = logger.get_metrics_tracker(session_id)
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "success": True,
+        "summary": tracker.compute_summary(),
+    }
+

@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
+from services.voice_metrics import VoiceMetricsTracker
+
+
 # 로그 저장 폴더 경로 (be 폴더 기준)
 LOG_DIR = Path(__file__).resolve().parents[1] / "conversation_logs"
 
@@ -34,6 +37,7 @@ class ConversationSession(BaseModel):
     system_prompt: Optional[str] = None
     entries: List[ConversationEntry] = []
     token_usage: Optional[Dict[str, Any]] = None
+    metrics_summary: Optional[Dict[str, Any]] = None  # 세션별 Voice 평가지표 요약
 
 
 class ConversationLogger:
@@ -43,6 +47,7 @@ class ConversationLogger:
         # 로그 폴더 생성
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         self._active_sessions: Dict[str, ConversationSession] = {}
+        self._metrics_trackers: Dict[str, VoiceMetricsTracker] = {}
     
     def start_session(
         self,
@@ -61,6 +66,7 @@ class ConversationLogger:
             entries=[],
         )
         self._active_sessions[session_id] = session
+        self._metrics_trackers[session_id] = VoiceMetricsTracker(session_id=session_id)
         
         # 시스템 프롬프트를 첫 번째 엔트리로 추가
         if system_prompt:
@@ -72,6 +78,34 @@ class ConversationLogger:
         
         print(f"📝 [ConversationLogger] 세션 시작: {session_id}")
         return session
+
+    def get_metrics_tracker(self, session_id: str) -> Optional[VoiceMetricsTracker]:
+        """세션의 VoiceMetricsTracker 인스턴스를 가져옵니다."""
+        if session_id not in self._metrics_trackers:
+            self._metrics_trackers[session_id] = VoiceMetricsTracker(session_id=session_id)
+        return self._metrics_trackers.get(session_id)
+    
+    def end_session(self, session_id: str) -> Optional[str]:
+        """세션을 종료하고 파일 경로를 반환합니다."""
+        session = self._active_sessions.get(session_id)
+        if not session:
+            return None
+        
+        # 메트릭 요약 계산 및 세션에 첨부
+        tracker = self._metrics_trackers.get(session_id)
+        if tracker:
+            session.metrics_summary = tracker.compute_summary()
+        
+        session.ended_at = datetime.now().isoformat()
+        filepath = self._save_session(session_id, final=True)
+        
+        # 메모리에서 제거
+        del self._active_sessions[session_id]
+        if session_id in self._metrics_trackers:
+            del self._metrics_trackers[session_id]
+        
+        print(f"📝 [ConversationLogger] 세션 종료: {session_id} -> {filepath}")
+        return filepath
     
     def log_entry(
         self,
