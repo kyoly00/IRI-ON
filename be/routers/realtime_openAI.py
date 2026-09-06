@@ -43,14 +43,13 @@ async def get_session_info(
     """사용자/레시피 정보 조회 및 시스템 프롬프트 생성하여 반환."""
     
     profile = user_crud.get_user_by_id(db, user_id)
-    print(profile)
-    recipe = recipe_crud.get_recipe_by_id(db, recipe_id)
-    print(recipe)
+    recipe = recipe_crud.get_recipe_model_by_id(db, recipe_id)
 
-    if not profile or not recipe:
-        raise HTTPException(status_code=404, detail="User or recipe not found")
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
     
     user_profile = {
+        # 비로그인/개발 환경에서도 레시피 동행은 시작할 수 있게 보수적인 기본값을 쓴다.
         "knife_skill": "사용 가능" if getattr(profile, "can_use_knife", False) else "서툼",
         "stove_skill": "사용 가능" if getattr(profile, "can_use_fire", False) else "서툼",
         "scissors_skill": "사용 가능" if getattr(profile, "can_use_scissors", False) else "서툼",
@@ -65,36 +64,63 @@ async def get_session_info(
     # 레시피 단계 조회
     from models.recipe.recipe_step import RecipeStep
     steps = db.query(RecipeStep).filter(RecipeStep.recipe_id == recipe_id).order_by(RecipeStep.step).all()
-    recipe_steps = [{"step": step.step, "text": step.text or ""} for step in steps]
+    recipe_steps = [
+        {
+            "step": step.step,
+            "text": step.text or "",
+            "duration": step.step_len,
+        }
+        for step in steps
+    ]
+
+    # 아직 영상 타임라인을 만들지 않은 레시피는 원 레시피 단계를 음성 안내에 사용한다.
+    if not recipe_steps:
+        from services.youtube_recipe_timeline import parse_recipe_steps
+        recipe_steps = [
+            {"step": index, "text": text, "duration": None}
+            for index, text in enumerate(parse_recipe_steps(recipe.instructions), start=1)
+        ]
     
     # 시스템 프롬프트 생성
     if recipe_steps:
-        recipe_steps_text = ",\n            ".join([f'{s["step"]}: "{s["text"]}"' for s in recipe_steps])
+        recipe_steps_text = ",\n            ".join(
+            [
+                f'{s["step"]}: "{s["text"]}"'
+                + (f' (영상 {s["duration"]}초)' if s["duration"] else "")
+                for s in recipe_steps
+            ]
+        )
     else:
         recipe_steps_text = getattr(recipe, "instructions", "") or "레시피 단계 정보가 없습니다."
 
-    system_prompt = f"""너는 아동을 위한 친절한 요리 보조 AI "셰프얌"이야. 모든 입출력은 한국어로만 해. 존댓말은 쓰지마.
-    ### 단계 진행 및 도구 규칙
-    1. 사용자가 여러 단계를 이미 완료했다고 말하면 해당 단계들을 모두 완료한 것으로 인정하고, 다음 해야 할 단계로 바로 넘어가.
-    예) "손 씻고 도구도 준비해왔어" → 1, 2단계 완료로 인정 후 3단계 안내
-    예) "불 켜고 기름도 뒀어" → 6, 7단계 완료로 인정 후 8단계 안내
-    2. 사용자가 현재 단계보다 앞선 단계를 이미 했다고 하면 그대로 인정하고 이후 단계를 안내해. 단계 순서에 과하게 집착하지 마.
-    3. 사용자가 "다 했어", "다음 단계 보여줘", "다음으로 넘어가자"라고 하거나 다음 요리 단계를 안내할 때는 반드시 `navigate_cooking_step(action="next")` 도구를 호출해 화면 영상을 다음 단계로 넘겨줘.
-    4. 사용자가 "방금 거 다시 보여줘", "이전 단계로 가줘"라고 하면 `navigate_cooking_step(action="prev")` 도구를 호출해.
-    5. 사용자가 "3단계 보여줘"처럼 특정 단계를 요청하거나 특정 단계로 건너뛸 때는 `navigate_cooking_step(action="set", target_step=3)` 도구를 호출해.
-    6. 현재 단계에 대한 추가 설명(타이머, 팁, 대체재료 등)을 줄 때는 다음 단계를 먼저 말하지 마.
-    7. 사용자가 재료를 쿠팡에서 구매하길 원하면 open_coupang 도구를 호출해서 검색 페이지를 열어줘.
-    8. 사용자가 요리나 식재료의 영양 정보(칼로리, 탄수화물, 지방, 단백질 등)를 물어보면 searchFoodNutrition 도구를 사용하여 정확한 정보를 검색 후 친절하게 알려줘.
+    system_prompt = f"""너는 아동(어린이)을 위한 다정하고 친절한 요리 친구 AI "셰프얌"이야.
+모든 입출력은 한국어로만 해. 절대 존댓말(~해요, ~합니다)을 쓰지 말고, 항상 다정하고 신나는 반말(~해, ~야, ~하자!)을 써.
 
-    오늘 만들 요리: {user_profile["menu"]}
-    사용할 재료: {ingredients_text}
-    사용할 조리도구: {tools_text}
-    알레르기: {user_profile["allergy"]}
-    요리 단계:
-        {recipe_steps_text}
-    ### 답변 규칙
-    - 한 번에 단계 하나만 말해. 여러 단계를 한 문단에 몰아서 말하지 마.
-    - 각 단계 끝에는 "준비되면 말해줘."라고 항상 짧게 물어봐."""
+### 🌟 성격 및 어조 가이드
+- 어린이가 쉽게 따라 할 수 있도록 쉬운 단어와 친절한 비유를 사용해.
+- '필링', '시즈닝', '가니쉬', 'Ts' 같은 어려운 요리 용어는 쓰지 마.
+  (예: '필링' -> '달콤한 속재료', '1Ts' -> '밥숟가락으로 1큰술', '1ts' -> '작은 티스푼으로 1작은술')
+- 어린이가 한 단계를 마칠 때마다 "와, 정말 멋져!", "참 잘했어!" 하고 칭찬과 격려를 아끼지 마.
+
+### 📋 단계 진행 및 영상 도구 규칙
+1. **시작 안내**: 대화 시작 시 손 씻기는 요리 전 위생 안내이며, 손을 씻고 나면 반드시 **요리 단계 1번(1단계)**부터 차근차근 시작해. (절대 1단계를 건너뛰고 2단계로 가지 마!)
+2. **한 번에 딱 하나만**: 어린이가 헷갈리지 않게 한 번에 한 단계의 조리 행동만 안내해. 여러 단계를 한꺼번에 묶어서 설명하지 마.
+3. **영상 제어 도구 호출 (중요)**:
+   - 다음 단계로 넘어갈 때(사용자가 "다 했어", "다음 보여줘" 하거나 새로운 단계를 안내할 때): 반드시 `navigate_cooking_step(action="next")` 도구를 함께 호출해 화면 영상도 함께 넘겨줘.
+   - 이전 단계로 돌아갈 때: `navigate_cooking_step(action="prev")` 도구를 호출해.
+   - 특정 단계를 건너뛰거나 지정할 때: `navigate_cooking_step(action="set", target_step=N)` 도구를 호출해.
+4. **마무리 확인 멘트**: 각 단계 설명을 마친 뒤에는 항상 "다 했으면 '다 했어'라고 말해줘!" 또는 "준비되면 말해줘!"라고 짧게 물어봐.
+5. **안전 주의사항**: 불, 뜨거운 기름, 칼, 가위, 에어프라이어를 쓸 때는 "손 조심하고 천천히 해!"라고 꼭 안전 주의를 줘.
+6. **쇼핑 및 영양**:
+   - 재료 구매 질문: `open_coupang` 도구 호출
+   - 영양 정보 질문: `searchFoodNutrition` 도구 호출
+
+오늘 만들 요리: {user_profile["menu"]}
+사용할 재료: {ingredients_text}
+사용할 조리도구: {tools_text}
+알레르기: {user_profile["allergy"]}
+요리 단계:
+    {recipe_steps_text}"""
 
 
     return {
@@ -108,7 +134,7 @@ async def get_session_info(
 class RealtimeSessionRequest(BaseModel):
     """프론트에서 요청하는 모델/보이스/맞춤 인스트럭션 정보."""
 
-    model: str = "gpt-realtime-2.1-mini"
+    model: str = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
     voice: str = "ash"
     instructions: Optional[str] = None
     tools: Optional[List[Dict[str, Any]]] = None  # 프론트엔드에서 전달받은 툴 정의
@@ -139,7 +165,7 @@ async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dic
             tools = []
 
     # 2. Model
-    model_name = payload.model or "gpt-realtime-2.1-mini"
+    model_name = payload.model or os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
 
     # 3. Current Realtime session configuration
     session: Dict[str, Any] = {
@@ -323,7 +349,7 @@ async def mcp_send_video_url(
                     best_step = step.step
             
             if best_match and best_similarity > 0.3:  # 최소 유사도 임계값
-                video_url = best_match.url or ""
+                video_url = best_match.start_url or best_match.url or ""
                 print(f"✅ [Video] 매칭된 Step {best_step}: 유사도 {best_similarity:.3f}, URL: {video_url or 'No URL'}")
                 return {
                     "success": True,
@@ -332,13 +358,16 @@ async def mcp_send_video_url(
                     "recipe_id": recipe_id,
                     "similarity": round(best_similarity, 3),
                     "matched_text": best_match.text,
+                    "video_id": best_match.video_id,
+                    "start_seconds": best_match.start_seconds,
+                    "step_len": best_match.step_len,
                 }
             else:
                 print(f"⚠️ [Video] 유사도가 낮아 매칭 실패 (최고 유사도: {best_similarity:.3f})")
                 # 유사도가 낮으면 step 파라미터로 폴백
                 if request.step:
                     step_video = recipe_crud.get_step_video(db, recipe_id, request.step)
-                    video_url = step_video.url if step_video and step_video.url else ""
+                    video_url = (step_video.start_url or step_video.url) if step_video else ""
                     return {
                         "success": True,
                         "step": request.step,
@@ -346,6 +375,7 @@ async def mcp_send_video_url(
                         "recipe_id": recipe_id,
                         "similarity": 0.0,
                         "fallback": True,
+                        "step_len": step_video.step_len if step_video else None,
                     }
         
         # text가 없거나 매칭 실패 시: step 번호로 직접 조회
@@ -355,7 +385,7 @@ async def mcp_send_video_url(
             step = all_steps[0].step
         
         step_video = recipe_crud.get_step_video(db, recipe_id, step)
-        video_url = step_video.url if step_video and step_video.url else ""
+        video_url = (step_video.start_url or step_video.url) if step_video else ""
         
         print(f"🎥 [Video] Recipe {recipe_id}, Step {step}: {video_url or 'No video found'}")
         
@@ -364,6 +394,9 @@ async def mcp_send_video_url(
             "step": step,
             "url": video_url,
             "recipe_id": recipe_id,
+            "video_id": step_video.video_id if step_video else None,
+            "start_seconds": step_video.start_seconds if step_video else None,
+            "step_len": step_video.step_len if step_video else None,
         }
     except Exception as e:
         print(f"❌ [Video] Error loading step video: {e}")
@@ -878,4 +911,3 @@ async def get_session_metrics_summary(session_id: str) -> Dict[str, Any]:
         "success": True,
         "summary": tracker.compute_summary(),
     }
-

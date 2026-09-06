@@ -35,7 +35,7 @@ export default function Welcome1() {
       });
 
       let data = null;
-      try { data = await res.json(); } catch {}
+      try { data = await res.json(); } catch { data = null; }
 
       if (res.ok && data?.user_id != null) {
         // ✅ user_id 저장
@@ -138,4 +138,3 @@ export default function Welcome1() {
     </div>
   );
 }
-

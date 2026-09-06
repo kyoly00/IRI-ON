@@ -34,3 +34,5 @@ class Recipe(Base):
     tools = Column(TEXT)
     materials = Column(TEXT, nullable=True)
     tips = Column(TEXT)
+    # 원본 레시피 영상. 단계별 타임라인은 RecipeStep에 저장한다.
+    video_url = Column(String(512), nullable=True)

@@ -75,7 +75,7 @@ export type OpenAIRealtimeServerEvent =
       delta: string;
     }
   | {
-      type: "response.audio_transcript.delta";
+      type: "response.audio_transcript.delta" | "response.output_audio_transcript.delta";
       event_id: string;
       response_id: string;
       item_id: string;
@@ -84,7 +84,7 @@ export type OpenAIRealtimeServerEvent =
       delta: string;
     }
   | {
-      type: "response.audio_transcript.done";
+      type: "response.audio_transcript.done" | "response.output_audio_transcript.done";
       event_id: string;
       response_id: string;
       item_id: string;
@@ -93,7 +93,7 @@ export type OpenAIRealtimeServerEvent =
       transcript: string;
     }
   | {
-      type: "response.audio.done";
+      type: "response.audio.done" | "response.output_audio.done";
       event_id: string;
       response_id: string;
       item_id: string;

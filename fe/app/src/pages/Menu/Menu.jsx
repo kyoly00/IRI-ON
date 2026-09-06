@@ -4,7 +4,7 @@ import "./Menu.css";
 import { FaSearch, FaClock } from "react-icons/fa";
 import { api } from "../../lib/api";
 
-const categories = ["전체", "한식", "중식", "일식", "양식", "간편식", "기타"];
+const categories = ["전체", "한식", "중식", "일식", "양식", "간식", "기타"];
 
 export default function Menu() {
   const [menuList, setMenuList] = useState([]);
@@ -12,11 +12,15 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [viewMode, setViewMode] = useState("전체"); // 전체 or 맞춤형
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   // ✅ 메뉴 불러오기
   const fetchMenus = async (mode, search = "", category = "전체") => {
     try {
+      setLoading(true);
+      setError("");
       let url = "";
       if (mode === "전체") {
         url = api('/recipes/');
@@ -36,6 +40,9 @@ export default function Menu() {
       setMenuList(data);
     } catch (err) {
       console.error("❌ 메뉴 불러오기 실패:", err);
+      setError("메뉴를 불러오지 못했어요. 백엔드 연결을 확인해 주세요.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -127,6 +134,7 @@ export default function Menu() {
             <img src={menu.image_url} alt={menu.name} className="menu-img" />
             <div className="menu-info">
               <span className="menu-name">{menu.name}</span>
+              {menu.has_video && <span className="menu-video-badge">▶ 구간 영상</span>}
               <div className="menu-meta">
                 <div className="menu-time">
                   <FaClock /> {menu.time}분
@@ -139,11 +147,14 @@ export default function Menu() {
             </div>
           </div>
         ))}
+        {loading && <p className="menu-message">메뉴를 불러오는 중이에요…</p>}
+        {!loading && error && <p className="menu-message error">{error}</p>}
+        {!loading && !error && menuList.length === 0 && <p className="menu-message">조건에 맞는 메뉴가 없어요.</p>}
       </div>
 
       {/* 하단 버튼 */}
       <div className="bottom-btn-wrapper">
-        <button className="start-btn" onClick={handleStartCooking}>
+        <button className="start-btn" onClick={handleStartCooking} disabled={!selectedId}>
           요리 시작하기
         </button>
       </div>

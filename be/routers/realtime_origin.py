@@ -197,7 +197,7 @@ async def cook_assistant_ws(
                     "step": connections[user_id]["current_step"],
                     "data": ""
                 })
-                print(f"No video found for recipe {recipe_id}, step {connections[user_id]["current_step"]}")
+                print(f"No video found for recipe {recipe_id}, step {connections[user_id]['current_step']}")
 
         async def run_timer(time):
             await asyncio.sleep(time)
@@ -339,4 +339,3 @@ async def cook_assistant_ws(
         if user_id in connections:
             await connections[user_id]['gemini'].close()
             del connections[user_id]
-            

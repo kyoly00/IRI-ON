@@ -1,5 +1,7 @@
 # seed.py
 import csv
+import re
+from pathlib import Path
 from db.session import SessionLocal
 from models.recipe.recipe import Recipe, Category as RecipeCategory
 from models.domain.ingredient import Ingredient
@@ -9,6 +11,8 @@ from models.recipe.recipe_tool import RecipeTool
 from models.recipe.recipe_step import RecipeStep
 from crud.recipe_crud import get_recipe_by_name
 from crud.domain_crud import get_ingredient_id_by_name, get_tool_id_by_name
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 category_map = {
     "한식": RecipeCategory.KOREAN,
@@ -41,7 +45,7 @@ tools = {
 def seed_recipes():
     db = SessionLocal()
     try:
-        with open("data/recipes.csv", newline="", encoding="utf-8") as f:
+        with (DATA_DIR / "recipes.csv").open(newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             if db.query(Recipe).count() == 0:    
                 existing_names = []
@@ -75,10 +79,63 @@ def seed_recipes():
     finally:
         db.close()
 
+
+def _number(value):
+    match = re.search(r"\d+", value or "")
+    return int(match.group()) if match else None
+
+
+def seed_youtube_recipes():
+    """대용량 CSV 중 YouTube 영상이 있는 레시피만 목록에 추가한다."""
+    db = SessionLocal()
+    try:
+        existing = {recipe.name: recipe for recipe in db.query(Recipe).all()}
+        difficulty_map = {
+            "초급": "EASY",
+            "중급": "MEDIUM",
+            "고급": "HARD",
+            "아무나": "EASY",
+        }
+        with (DATA_DIR / "recipes_2000to2054.csv").open(
+            newline="", encoding="utf-8-sig"
+        ) as file:
+            for row in csv.DictReader(file):
+                video_url = (row.get("video_url") or "").strip()
+                if "youtube.com/" not in video_url and "youtu.be/" not in video_url:
+                    continue
+
+                recipe = existing.get(row["title"])
+                if recipe:
+                    recipe.video_url = video_url
+                    continue
+
+                recipe = Recipe(
+                    name=row["title"],
+                    description=row.get("description") or "",
+                    image_url=row.get("main_image") or None,
+                    time=_number(row.get("time")),
+                    servings=_number(row.get("servings")),
+                    difficulty=difficulty_map.get(row.get("difficulty") or "아무나", "EASY"),
+                    instructions=row.get("steps") or "[]",
+                    category=RecipeCategory.OTHER,
+                    tools=row.get("tools") or "",
+                    materials=row.get("materials") or "",
+                    tips=row.get("tips") or "",
+                    video_url=video_url,
+                )
+                db.add(recipe)
+                existing[recipe.name] = recipe
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
 def seed_ingredients():
     db = SessionLocal()
     try:
-        with open("data/recipes_ingredients.csv", newline="", encoding="utf-8") as f:
+        with (DATA_DIR / "recipes_ingredients.csv").open(newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             if db.query(Ingredient).count() == 0:
                 existing_names = []
@@ -102,7 +159,7 @@ def seed_ingredients():
 def seed_recipes_ingredients():
     db = SessionLocal()
     try:
-        with open("data/recipes_ingredients.csv", newline="", encoding="utf-8") as f:
+        with (DATA_DIR / "recipes_ingredients.csv").open(newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             if db.query(RecipeIngredient).count() == 0:
                 existing_keys = []
@@ -152,7 +209,7 @@ def seed_tools():
 def seed_recipes_tools():
     db = SessionLocal()
     try:
-        with open("data/recipes_tools.csv", newline="", encoding="utf-8") as f:
+        with (DATA_DIR / "recipes_tools.csv").open(newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             if db.query(RecipeTool).count() == 0:
                 existing_keys = []
@@ -180,7 +237,7 @@ def seed_recipes_tools():
 def seed_videos():
     db = SessionLocal()
     try:
-        with open("data/shrimp_fried_rice_recipe_steps.csv", newline="", encoding="utf-8") as f:
+        with (DATA_DIR / "shrimp_fried_rice_recipe_steps.csv").open(newline="", encoding="cp949") as f:
             reader = csv.DictReader(f)
             if db.query(RecipeStep).count() == 0:
                 existing_keys = []
@@ -193,10 +250,21 @@ def seed_videos():
                         recipe_id=row["recipe_id"],
                         text=row["text"],
                         step=row["step"],
-                        url=row["url"]
+                        url=row["url"],
+                        video_id=row["url"].split("youtu.be/")[-1].split("?")[0],
+                        start_url=row["url"],
+                        start_seconds=0,
                     )
                     db.add(recipe_step)
                     existing_keys.append((row["recipe_id"], row["step"]))
+        # 이미 구축한 DB에도 새 영상 메타데이터를 채운다.
+        for recipe_step in db.query(RecipeStep).all():
+            if recipe_step.url and not recipe_step.start_url:
+                recipe_step.start_url = recipe_step.url
+            if recipe_step.url and not recipe_step.video_id and "youtu.be/" in recipe_step.url:
+                recipe_step.video_id = recipe_step.url.split("youtu.be/")[-1].split("?")[0]
+            if recipe_step.start_seconds is None and recipe_step.url:
+                recipe_step.start_seconds = 0
         db.commit()
     except Exception:
         db.rollback()
@@ -206,9 +274,9 @@ def seed_videos():
 
 def seed():
     seed_recipes()
+    seed_youtube_recipes()
     seed_ingredients()
     seed_recipes_ingredients()
     seed_tools()
     seed_recipes_tools()
     seed_videos()
-    

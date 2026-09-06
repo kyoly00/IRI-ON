@@ -1,223 +1,239 @@
-import React, { useState, useRef, useMemo, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import YouTube from "react-youtube";
-import { FaPlay, FaStop } from "react-icons/fa";
+import { FaPlay, FaRedo, FaStop } from "react-icons/fa";
+
 import topLogo from "../../assets/top_logo.png";
-import CookingIcon from "../../assets/cookingexplain.png";
-import { ws } from "../../lib/api";
+import { api } from "../../lib/api";
 import { useOpenAIVoiceChat } from "../../lib/ai/speech/open-ai/use-voice-chat.openai";
 import "./CookingExplain.css";
 
-/* ===== 1) 단계별 유튜브 하드코딩 목록 ===== */
-const steps = [
-  { step: 1, url: "https://youtu.be/x-J0U3svqZU" },
-  { step: 2, url: "https://youtu.be/cwIo1ieglgo" },
-  { step: 3, url: "https://youtu.be/odD06ItB7Rk" },
-  { step: 4, url: "https://youtu.be/jNH9IzAgnwU" },
-  { step: 5, url: "https://youtu.be/aUSBS7VdfXk" },
-  { step: 6, url: "https://youtu.be/ahPBHBw62vo" },
-  { step: 7, url: "https://youtu.be/AhfnZKMuZzM" },
-  { step: 8, url: "https://youtu.be/4ih3XWJOJ4o" },
-  { step: 9, url: "https://youtu.be/UhX3TCmqPUU" },
-  { step: 10, url: "https://youtu.be/8QCO6QuQH74" },
-  { step: 11, url: "https://youtu.be/jd6PlSQ5jSo" },
-  { step: 12, url: "https://youtu.be/3BMkcroT1Kg" },
-  { step: 13, url: "https://youtu.be/jBQ-4fFq9XI" },
-  { step: 14, url: "https://youtu.be/ZugD66Ga2pw" },
-  { step: 15, url: "https://youtu.be/XXZWKvkm6Jw" },
-  { step: 16, url: "https://youtu.be/RbCpZU89eM8" },
-  { step: 17, url: "https://youtu.be/xJSoEW3iKHI" },
-  { step: 18, url: "https://youtu.be/Hn4NRKE-ppI" },
-];
-
-/* 유튜브 ID 추출 */
 const getVideoId = (url) => {
+  if (!url) return "";
   try {
-    const u = new URL((url || "").trim());
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
-    return u.searchParams.get("v") || "";
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.split("/")[1] || "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (["embed", "shorts", "live"].includes(parts[0])) return parts[1] || "";
+    return parsed.searchParams.get("v") || "";
   } catch {
     return "";
   }
 };
 
-const DEMO_USER_ID = 5; // TODO: 실제 로그인 사용자 정보로 교체
-const DEMO_RECIPE_ID = 42;
+const formatSeconds = (seconds) => {
+  if (!Number.isFinite(seconds)) return "";
+  const minutes = Math.floor(seconds / 60);
+  const remain = Math.floor(seconds % 60);
+  return `${minutes}:${String(remain).padStart(2, "0")}`;
+};
 
 export default function CookingExplain() {
-  /* ===== 2) 영상 상태 ===== */
-  const [currentStep, setCurrentStep] = useState(0); // 0-index
-  const [blocked, setBlocked] = useState(new Set()); // 임베딩 금지 스텝 기록
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const recipeId = Number(id);
+  const userId = Number(localStorage.getItem("user_id")) || 5;
   const playerRef = useRef(null);
 
-  const { videoId, link } = useMemo(() => {
-    const url = steps[currentStep]?.url ?? steps[0].url;
-    return { videoId: getVideoId(url), link: url };
-  }, [currentStep]);
+  const [recipe, setRecipe] = useState(null);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [embedError, setEmbedError] = useState(false);
 
-  /* ===== 3) 유튜브 옵션/핸들러 ===== */
-  const ytOpts = {
-    width: "100%",
-    height: "315",
-    host: "https://www.youtube.com",
-    playerVars: { autoplay: 1, controls: 1, mute: 1, playsinline: 1 },
-  };
-
-  const onReady = (e) => {
-    playerRef.current = e.target;
-    try { e.target.playVideo(); } catch { }
-  };
-
-  const onError = (e) => {
-    const code = e.data;
-    // 101/150: 임베딩 금지 → 다음 재생 가능한 스텝으로 스킵
-    if (code === 101 || code === 150) {
-      setBlocked((prev) => new Set(prev).add(currentStep));
-      const next = findNextPlayable(currentStep);
-      if (next !== currentStep) setCurrentStep(next);
-    }
-  };
-
-  const findNextPlayable = (startIdx) => {
-    for (let i = startIdx + 1; i < steps.length; i++) {
-      if (!blocked.has(i)) return i;
-    }
-    return startIdx;
-  };
-
-  const handlePrev = () => setCurrentStep((s) => Math.max(s - 1, 0));
-  const handleNext = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
-
-  /* ===== 4) OpenAI Realtime 훅 초기화 ===== */
-  const selectStepFromEvent = useCallback((event) => {
-    const fallback = Number.isFinite(event?.step)
-      ? Math.max(0, Math.min(steps.length - 1, Number(event.step) - 1))
-      : currentStep;
-    if (typeof event?.data === "string" && event.data.trim()) {
-      const normalized = event.data.trim().replace(/\/$/, "");
-      const fromUrl = steps.findIndex(
-        (s) => s.url.replace(/\/$/, "") === normalized,
-      );
-      if (fromUrl >= 0) return fromUrl;
-    }
-    return fallback;
-  }, [currentStep]);
-
-  const handleAssistantEvent = useCallback(
-    (event) => {
-      if (event.type === "video") {
-        setCurrentStep(selectStepFromEvent(event));
-      } else if (event.type === "navigate_step") {
-        if (event.action === "next") {
-          setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
-        } else if (event.action === "prev") {
-          setCurrentStep((s) => Math.max(s - 1, 0));
-        } else if (event.action === "set" && Number.isFinite(event.targetStep)) {
-          const idx = Math.max(0, Math.min(steps.length - 1, Number(event.targetStep) - 1));
-          setCurrentStep(idx);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    fetch(api(`/recipes/${recipeId}`), { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("레시피를 불러오지 못했어요.");
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setRecipe(data);
+          setCurrentStep(0);
         }
-      }
-    },
-    [selectStepFromEvent],
-  );
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason.message || "레시피를 불러오지 못했어요.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [recipeId]);
+
+  const steps = recipe?.steps || [];
+  const activeStep = steps[currentStep] || null;
+  const videoId = activeStep?.video_id || recipe?.video_id || getVideoId(recipe?.video_url);
+  const startSeconds = Number(activeStep?.start_seconds) || 0;
+  const stepLength = Number(activeStep?.step_len) || null;
+  const startUrl = activeStep?.start_url || recipe?.video_url || "";
+
+  const moveToStep = useCallback((index) => {
+    setCurrentStep(Math.max(0, Math.min(index, Math.max(steps.length - 1, 0))));
+    setEmbedError(false);
+  }, [steps.length]);
+
+  const handleAssistantEvent = useCallback((event) => {
+    if (event.type === "video" && Number.isFinite(Number(event.step))) {
+      moveToStep(Number(event.step) - 1);
+      return;
+    }
+    if (event.type !== "navigate_step") return;
+    if (event.action === "next") setCurrentStep((value) => Math.min(value + 1, Math.max(steps.length - 1, 0)));
+    if (event.action === "prev") setCurrentStep((value) => Math.max(value - 1, 0));
+    if (event.action === "set" && Number.isFinite(Number(event.targetStep))) {
+      moveToStep(Number(event.targetStep) - 1);
+    }
+  }, [moveToStep, steps.length]);
 
   const voiceChat = useOpenAIVoiceChat({
-    userId: DEMO_USER_ID,
-    recipeId: DEMO_RECIPE_ID,
+    userId,
+    recipeId,
     onAssistantEvent: handleAssistantEvent,
   });
 
-  const connectionLabel = voiceChat.isActive
-    ? "연결됨"
-    : voiceChat.isLoading
-      ? "연결 중…"
-      : "대기 중";
+  const ytOpts = useMemo(() => {
+    const playerVars = {
+      autoplay: 1,
+      controls: 1,
+      playsinline: 1,
+      start: startSeconds,
+      rel: 0,
+    };
+    if (stepLength) playerVars.end = startSeconds + stepLength;
+    return { width: "100%", height: "315", playerVars };
+  }, [startSeconds, stepLength]);
 
-  const canStartVoice = Boolean(voiceChat.sessionInfo?.system_prompt);
+  const handleReady = (event) => {
+    playerRef.current = event.target;
+    event.target.seekTo(startSeconds, true);
+    event.target.playVideo();
+  };
 
-  /* ===== 9) UI ===== */
+  const replay = () => {
+    if (!playerRef.current) return;
+    playerRef.current.seekTo(startSeconds, true);
+    playerRef.current.playVideo();
+  };
+
+  const latestAssistantMessage = [...voiceChat.messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.parts.some((part) => part.type === "text"));
+  const latestText = latestAssistantMessage?.parts.find((part) => part.type === "text")?.text;
+
+  if (loading) return <div className="cooking-page cooking-state">레시피를 준비하고 있어요…</div>;
+  if (error || !recipe) {
+    return (
+      <div className="cooking-page cooking-state">
+        <p>{error || "레시피가 없어요."}</p>
+        <button onClick={() => navigate("/menu")}>메뉴로 돌아가기</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="complete-page">
-      <div className="complete-header">
+    <div className="cooking-page">
+      <header className="cooking-header">
+        <button className="back-button" onClick={() => navigate("/menu")} aria-label="메뉴로 돌아가기">←</button>
         <img src={topLogo} className="logo" alt="CHEF YUM" />
-      </div>
+        <span className="header-spacer" />
+      </header>
 
-      <div className="main-icon">
-        <img src={CookingIcon} alt="조리 아이콘" className="cooking-img" />
-      </div>
-
-      {/* 유튜브 영상 */}
-      <div className="cooking-video">
-        <YouTube key={videoId} videoId={videoId} opts={ytOpts} onReady={onReady} onError={onError} />
-      </div>
-
-      {/* 임베딩 금지 안내 */}
-      {blocked.has(currentStep) && (
-        <div className="yt-fallback">
-          이 영상은 소유자 설정으로 앱에서 재생할 수 없어요.{" "}
-          <a href={link} target="_blank" rel="noreferrer">유튜브에서 보기</a>
+      <section className="recipe-heading">
+        <img src={recipe.image_url} alt="" />
+        <div>
+          <span className="video-badge">{recipe.has_video ? "영상 레시피" : "레시피"}</span>
+          <h1>{recipe.name}</h1>
+          <p>{recipe.description}</p>
+          <div className="recipe-meta">
+            {recipe.time && <span>⏱ {recipe.time}분</span>}
+            {recipe.servings && <span>🍽 {recipe.servings}인분</span>}
+            {recipe.difficulty && <span>난이도 {recipe.difficulty}</span>}
+          </div>
         </div>
+      </section>
+
+      {videoId ? (
+        <section className="video-section">
+          <YouTube
+            key={`${videoId}-${startSeconds}-${stepLength || "full"}`}
+            videoId={videoId}
+            opts={ytOpts}
+            onReady={handleReady}
+            onError={() => setEmbedError(true)}
+          />
+          {embedError && (
+            <p className="yt-fallback">
+              앱에서 재생할 수 없는 영상이에요. <a href={startUrl} target="_blank" rel="noreferrer">YouTube에서 보기</a>
+            </p>
+          )}
+          {!recipe.timeline_ready && (
+            <p className="timeline-notice">아직 구간 타임라인을 생성하지 않아 전체 영상과 원문 단계를 보여주고 있어요.</p>
+          )}
+        </section>
+      ) : (
+        <img className="recipe-main-image" src={recipe.image_url} alt={recipe.name} />
       )}
 
-      {/* 영상 제어 */}
+      {activeStep && (
+        <section className="step-card">
+          <div className="step-title-row">
+            <h2>{activeStep.step}단계 <small>/ {steps.length}</small></h2>
+            {recipe.timeline_ready && (
+              <span>{formatSeconds(startSeconds)} · {stepLength}초</span>
+            )}
+          </div>
+          <p>{activeStep.text}</p>
+        </section>
+      )}
+
       <div className="cooking-controls">
-        <button onClick={handlePrev}>← 이전</button>
-        <button onClick={() => playerRef.current?.playVideo()}>▶ 재생</button>
-        <button onClick={() => playerRef.current?.pauseVideo()}>⏸ 멈춤</button>
-        <button onClick={handleNext}>다음 →</button>
+        <button onClick={() => moveToStep(currentStep - 1)} disabled={currentStep === 0}>← 이전</button>
+        {videoId && <button className="replay-button" onClick={replay}><FaRedo /> 다시 보기</button>}
+        <button onClick={() => moveToStep(currentStep + 1)} disabled={currentStep >= steps.length - 1}>다음 →</button>
       </div>
 
-      {/* 음성 제어 + 연결상태 */}
-      <div className="control-buttons" style={{ alignItems: "center", gap: 12 }}>
-        {!voiceChat.isActive ? (
+      <nav className="step-list" aria-label="레시피 단계">
+        {steps.map((step, index) => (
           <button
-            className="play-btn"
-            onClick={voiceChat.start}
-            disabled={!canStartVoice || voiceChat.isLoading}
+            key={step.step}
+            className={index === currentStep ? "active" : ""}
+            onClick={() => moveToStep(index)}
           >
-            <FaPlay /> 음성 시작
+            {step.step}
+          </button>
+        ))}
+      </nav>
+
+      <section className="voice-card">
+        <div>
+          <h2>셰프얌과 같이 요리하기</h2>
+          <p>{voiceChat.isActive ? (voiceChat.isAssistantSpeaking ? "셰프얌이 말하고 있어요" : "듣고 있어요. 편하게 말해 주세요!") : "음성으로 단계 이동과 질문을 도와줄게요."}</p>
+        </div>
+        {!voiceChat.isActive ? (
+          <button className="play-btn" onClick={voiceChat.start} disabled={!voiceChat.sessionInfo || voiceChat.isLoading}>
+            <FaPlay /> {voiceChat.isLoading ? "연결 중" : "시작"}
           </button>
         ) : (
-          <button className="stop-btn" onClick={voiceChat.stop}>
-            <FaStop /> 음성 중지
-          </button>
+          <button className="stop-btn" onClick={voiceChat.stop}><FaStop /> 종료</button>
         )}
-        <span style={{ fontSize: 12, color: "#666" }}>
-          상태: {connectionLabel}
-        </span>
-        {!canStartVoice && (
-          <span style={{ fontSize: 12, color: "#999" }}>
-            프롬프트 동기화 후 시작할 수 있어요.
-          </span>
-        )}
-      </div>
+      </section>
 
-      {voiceChat.error && (
-        <div className="card error">
-          <h2>에러</h2>
-          <p>{voiceChat.error.message}</p>
-        </div>
-      )}
+      {voiceChat.error && <p className="voice-error">음성 연결 오류: {voiceChat.error.message}</p>}
+      {latestText && <div className="assistant-bubble">🤖 {latestText}</div>}
 
-      {voiceChat.sessionInfo && (
-        <div className="card">
-          <h2>대화 기록</h2>
-          <ul className="voice-log">
-            {voiceChat.messages
-              .filter((message) => message.role === "assistant")
-              .slice(-1)
-              .map((message) => {
-                const firstPart = message.parts.find((p) => p.type === "text");
-                const text = firstPart ? firstPart.text : "[도구 호출]";
-                return (
-                  <li key={message.id}>
-                    <strong>🤖 </strong>{" "}
-                    <span>{text}</span>
-                  </li>
-                );
-              })}
-          </ul>
-        </div>
-      )}
+      <details className="recipe-detail-card">
+        <summary>재료와 조리도구 보기</summary>
+        <h3>재료</h3>
+        <p>{recipe.materials || "등록된 재료가 없어요."}</p>
+        <h3>조리도구</h3>
+        <p>{recipe.tools || "등록된 조리도구가 없어요."}</p>
+        {recipe.tips && <><h3>팁</h3><p>{recipe.tips}</p></>}
+      </details>
     </div>
   );
 }

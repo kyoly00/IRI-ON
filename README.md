@@ -51,7 +51,7 @@ const config = {
 ```bash
 cd be
 pip install -r requirements.txt
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 > ⚡ `--reload` 옵션을 사용하면 코드 수정 시 서버가 자동 재시작됩니다.

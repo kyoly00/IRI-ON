@@ -73,21 +73,8 @@ export interface VoiceChatSession {
   stopListening: () => Promise<void>;
 }
 
-const OUTSOURCING_TOOLS = [
-  {
-    type: "mcp",
-    server_label: "playwright",
-    server_url: "http://localhost:8931/mcp",  // playwright mcp가 로컬 stdio라 `npx @playwright/mcp@latest --port 8931`로 서버 먼저 띄우기
-    require_approval: "never",
-  },
-  {
-    type: "mcp",
-    server_label: "tavily-remote-mcp",
-    server_url: "https://mcp.tavily.com/mcp",
-    authorization: "Bearer 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",
-    require_approval: "never",
-  },
-];
+// 외부 MCP 인증정보는 브라우저로 보내지 않고 FastAPI의 function bridge를 사용한다.
+const OUTSOURCING_TOOLS: any[] = [];
 
 export type VoiceChatOptions = {
   model?: string;
