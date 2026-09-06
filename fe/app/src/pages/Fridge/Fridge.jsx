@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import "./Fridge.css";
 import { useNavigate } from "react-router-dom";
 import { FaSearch, FaClock } from "react-icons/fa";
-import { api, get, post } from '../../lib/api';
+import { api } from '../../lib/api';
 
 const API_BASE = api;
 

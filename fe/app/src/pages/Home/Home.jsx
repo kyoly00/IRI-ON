@@ -7,6 +7,11 @@ import topLogo from "../../assets/top_logo.png";   // CHEF YUM 로고
 import chef3d from "../../assets/3dLogo.png";     // 셰프 캐릭터
 import { FiSearch, FiHeart, FiBell, FiStar, FiClock } from "react-icons/fi";
 
+const INTRO_TEXTS = [
+  "안녕! \n나는 AI 요리선생님\n셰프얌이야.",
+  "나만의 냉장고를 만들고\n맞춤 메뉴를 추천받아보자!\n\n오늘은 무엇을 먹을까? 🤔"
+];
+
 export default function Home() {
   const nav = useNavigate();
 
@@ -27,17 +32,13 @@ export default function Home() {
   ]);
 
   // ✅ 타이핑 효과용 멘트들
-  const texts = [
-    "안녕! \n나는 AI 요리선생님\n셰프얌이야.",
-    "나만의 냉장고를 만들고\n맞춤 메뉴를 추천받아보자!\n\n오늘은 무엇을 먹을까? 🤔"
-  ];
   const [displayText, setDisplayText] = useState("");
   const [textIdx, setTextIdx] = useState(0);
   const [charIdx, setCharIdx] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    const current = texts[textIdx];
+    const current = INTRO_TEXTS[textIdx];
     let timer;
 
     if (!isDeleting && charIdx <= current.length) {
@@ -54,12 +55,12 @@ export default function Home() {
       timer = setTimeout(() => setIsDeleting(true), 1500);
     } else if (isDeleting && charIdx < 0) {
       setIsDeleting(false);
-      setTextIdx((idx) => (idx + 1) % texts.length);
+      setTextIdx((idx) => (idx + 1) % INTRO_TEXTS.length);
       setCharIdx(0);
     }
 
     return () => clearTimeout(timer);
-  }, [charIdx, isDeleting, textIdx, texts]);
+  }, [charIdx, isDeleting, textIdx]);
 
   return (
     <div className="home-page">

@@ -175,6 +175,25 @@
   margin-bottom: 4px;
 }
 
+.menu-page .menu-video-badge {
+  align-self: flex-start;
+  margin-bottom: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff0e4;
+  color: #ed7a28;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.menu-page .menu-message {
+  padding: 28px 12px;
+  color: #7c7169;
+  text-align: center;
+}
+
+.menu-page .menu-message.error { color: #b93c34; }
+
 .menu-page .menu-time {
   display: flex;
   align-items: center;
@@ -220,4 +239,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.menu-page .start-btn:disabled {
+  opacity: .5;
+  cursor: default;
 }

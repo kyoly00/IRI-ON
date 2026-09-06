@@ -21,3 +21,4 @@ websockets==15.0.1
 wheel==0.45.1
 mcp==1.0.0
 httpx==0.25.0
+youtube-transcript-api==1.2.4

@@ -71,7 +71,10 @@ const createUIMessage = (payload: {
 export function useOpenAIVoiceChat(
   props?: VoiceChatOptions,
 ): VoiceChatSession {
-  const { model = "gpt-realtime-2.1-mini", voice = "ash" } = props || {};
+  const {
+    model = import.meta.env.VITE_OPENAI_REALTIME_MODEL ?? "gpt-realtime",
+    voice = "ash",
+  } = props || {};
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isAssistantSpeaking, setIsAssistantSpeaking] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -80,6 +83,7 @@ export function useOpenAIVoiceChat(
   const [error, setError] = useState<Error | null>(null);
   const [messages, setMessages] = useState<UIMessageWithCompleted[]>([]);
   const [sessionInfo, setSessionInfo] = useState<Record<string, any> | null>(null);
+  const sessionInfoKey = useRef<string>("");
   const [initialGreetingSent, setInitialGreetingSent] = useState(false);
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
@@ -306,10 +310,10 @@ export function useOpenAIVoiceChat(
 
   // 세션 정보 조회 (컴포넌트 마운트 시)
   const loadSessionInfo = useCallback(async (): Promise<any> => {
-    if (sessionInfo) return; // 이미 로드된 경우 스킵
-
     const userId = props?.userId ?? 2;
     const recipeId = props?.recipeId ?? 42;
+    const key = `${userId}:${recipeId}`;
+    if (sessionInfo && sessionInfoKey.current === key) return sessionInfo;
 
     try {
       // api() 함수 사용으로 통일
@@ -320,6 +324,7 @@ export function useOpenAIVoiceChat(
         throw new Error("Failed to fetch session info");
       }
       const data = await response.json();
+      sessionInfoKey.current = key;
       setSessionInfo(data);
       return data;
     } catch (err) {
@@ -331,10 +336,12 @@ export function useOpenAIVoiceChat(
 
   // 컴포넌트 마운트 시 세션 정보 로드
   useEffect(() => {
-    if (props?.userId && props?.recipeId && !sessionInfo) {
+    const key = `${props?.userId}:${props?.recipeId}`;
+    if (props?.userId && props?.recipeId && sessionInfoKey.current !== key) {
+      setSessionInfo(null);
       loadSessionInfo();
     }
-  }, [props?.userId, props?.recipeId, sessionInfo, loadSessionInfo]);
+  }, [props?.userId, props?.recipeId, loadSessionInfo]);
 
   // Step 2. FastAPI REST 엔드포인트에서 OpenAI Realtime 에페메럴 세션을 발급받는다.
   const createSession = useCallback(async (): Promise<OpenAIRealtimeSession> => {
@@ -397,10 +404,6 @@ export function useOpenAIVoiceChat(
     (payload: { text: string; isFinal: boolean }) => {
       const socket = assistantSocket.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
-        console.warn("⚠️ [broadcastAssistantOutput] WebSocket not ready", {
-          socket: !!socket,
-          readyState: socket?.readyState,
-        });
         return;
       }
       console.log("📤 [broadcastAssistantOutput]", {
@@ -469,6 +472,201 @@ export function useOpenAIVoiceChat(
 
     const itemId = generateUUID();
 
+    // 시스템 메시지인 경우 (초기 인사 등) - 사용자 입력 없이 응답 생성만 요청
+    if (isSystemMessage) {
+      console.log("🎤 [sendTextToLLM] Triggering initial response from LLM");
+      const responseEvent = {
+        type: "response.create",
+        response: {
+          instructions: text,
+        },
+      };
+      dataChannel.current.send(JSON.stringify(responseEvent));
+      return;
+    }
+
+    // 1. 일반 사용자 메시지 - 먼저 메시지 아이템 생성
+    const createEvent = {
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: text,
+          },
+        ],
+      },
+    };
+
+    console.log("📤 [sendTextToLLM] Sending message to LLM:", text);
+    dataChannel.current.send(JSON.stringify(createEvent));
+
+    // 2. 응답 생성을 요청 (이게 없으면 LLM이 응답하지 않음)
+    const responseEvent = {
+      type: "response.create",
+    };
+
+    // 약간의 지연 후 response.create 전송 (메시지가 처리될 시간을 줌)
+    setTimeout(() => {
+      console.log("📤 [sendTextToLLM] Requesting response from LLM");
+      dataChannel.current?.send(JSON.stringify(responseEvent));
+    }, 100);
+  }, []);
+
+  // 타이머 시작 함수
+  const startTimer = useCallback((step: number, duration: number) => {
+    // 기존 타이머가 있으면 취소
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    currentStepRef.current = step;
+
+    console.log(`⏰ [Timer] 시작: Step ${step}, ${duration}초`);
+
+    // 타이머 완료 시 LLM에 메시지 전송
+    timerRef.current = setTimeout(() => {
+      const timerMessage = `타이머가 끝났어. ${step}단계가 완료되었으니 다음 단계로 진행할 수 있어. 사용자에게 "다 했어"라고 말하라고 안내해줘.`;
+
+      console.log(`⏰ [Timer] 완료: Step ${step}`);
+      sendTextToLLM(timerMessage);
+
+      // 타이머 완료 이벤트 전송 (선택사항)
+      props?.onAssistantEvent?.({
+        type: "timer_complete",
+        step: step,
+        time: duration,
+        message: timerMessage,
+      });
+
+      timerRef.current = null;
+    }, duration * 1000);
+  }, [sendTextToLLM, props?.onAssistantEvent]);
+
+  // OpenAI → 클라이언트 MCP 호출을 수행하고 그 결과를 다시 데이터 채널로 전송
+  const clientFunctionCall = useCallback(
+    async ({
+      callId,
+      toolName,
+      args,
+      id,
+    }: {
+      callId: string;
+      toolName: string;
+      args: string;
+      id: string;
+    }) => {
+      console.log("🔧 [MCP Tool Call]", { toolName, callId, args });
+      let toolResult: any = "success";
+      setIsListening(false);
+      const toolArgs = args ? JSON.parse(args) : {};
+
+      // 도구 호출 로그 기록
+      await logToolCall(toolName, toolArgs, callId);
+
+      const builtInTool = DEFAULT_VOICE_TOOLS.find(
+        (tool) => tool.name === toolName,
+      );
+
+      try {
+        if (builtInTool) {
+          console.log("✅ [Built-in Tool]", toolName);
+          switch (toolName) {
+            case "changeBrowserTheme":
+              document.documentElement.dataset.theme = toolArgs?.theme ?? "light";
+              break;
+            case "endConversation":
+              await stop();
+              setMessages([]);
+              break;
+            case "navigate_cooking_step": {
+              const action = toolArgs?.action || "next";
+              const targetStep = toolArgs?.target_step;
+              console.log(`🎬 [Video Navigation] action=${action}, target_step=${targetStep}`);
+              props?.onAssistantEvent?.({
+                type: "navigate_step",
+                action,
+                targetStep,
+              });
+              toolResult = {
+                success: true,
+                action,
+                target_step: targetStep,
+                message: `요리 영상 단계를 ${action === 'set' ? `${targetStep}단계로` : action === 'next' ? '다음 단계로' : '이전 단계로'} 이동했습니다.`,
+              };
+              break;
+            }
+            default:
+              break;
+          }
+        } else {
+          // MCP 도구 호출 - HTML 파일의 callMcpTool 방식 참고
+          const toolId = extractMCPToolId(toolName);
+
+          // MCP 서버 URL이 설정되어 있는 경우 (props 또는 환경변수에서 가져올 수 있음)
+          const mcpServerUrl = props?.mcpServerUrl;
+
+          if (mcpServerUrl) {
+            // HTML 파일의 callMcpTool 방식과 동일하게 호출
+            const response = await fetch(mcpServerUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                serverName: toolId.serverName,
+                toolName: toolId.toolName,
+                arguments: toolArgs,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`MCP Server Error: ${response.status} ${response.statusText}`);
+            }
+
+            toolResult = await response.json();
+          } else {
+            // 기존 방식: 엔드포인트를 통한 호출
+            const endpoint = MCP_TOOL_ENDPOINTS.find(
+              (tool) => tool.name === toolName || tool.id?.endsWith(toolName),
+            );
+
+            if (!endpoint) {
+              console.error("❌ [MCP Tool] Unknown tool:", toolName);
+              toolResult = {
+                error: `Unknown tool: ${toolName}`,
+              };
+            } else {
+              console.log("📍 [MCP Tool] Calling endpoint:", endpoint.endpoint);
+              const url = endpoint.endpoint.replace("{toolName}", toolName);
+              const fullUrl = api(url);
+              console.log("📡 [MCP Tool] Full URL:", fullUrl);
+
+              // send_video_url인 경우 최근 assistant 텍스트와 recipe_id 추가
+              let requestBody = { ...toolArgs };
+              if (toolName === "send_video_url") {
+                if (recentAssistantTextRef.current) {
+                  requestBody.text = recentAssistantTextRef.current;
+                  console.log("📺 [Video] Assistant 텍스트 포함:", recentAssistantTextRef.current.substring(0, 50) + "...");
+                }
+                // recipe_id 추가
+                if (props?.recipeId) {
+                  requestBody.recipe_id = props.recipeId;
+                  console.log("📺 [Video] Recipe ID 추가:", props.recipeId);
+                }
+              }
+
+              const response = await fetch(fullUrl, {
+                method: endpoint.method ?? "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(requestBody),
+              });
+              if (!response.ok) {
+                console.error("❌ [MCP Tool] Response error:", response.status, response.statusText);
     // 시스템 메시지인 경우 (초기 인사 등) - 사용자 입력 없이 응답 생성만 요청
     if (isSystemMessage) {
       console.log("🎤 [sendTextToLLM] Triggering initial response from LLM");
@@ -773,7 +971,8 @@ export function useOpenAIVoiceChat(
           }
           break;
         }
-        case "response.audio_transcript.delta": {
+        case "response.audio_transcript.delta":
+        case "response.output_audio_transcript.delta": {
           setIsAssistantSpeaking(true);
           bridgeBuffer.current += event.delta;
           recentAssistantTextRef.current += event.delta; // 텍스트 누적
@@ -810,7 +1009,8 @@ export function useOpenAIVoiceChat(
           });
           break;
         }
-        case "response.audio_transcript.done": {
+        case "response.audio_transcript.done":
+        case "response.output_audio_transcript.done": {
           const finalText = event.transcript ?? bridgeBuffer.current;
           recentAssistantTextRef.current = finalText; // 최종 텍스트 저장
           broadcastAssistantOutput({
@@ -930,13 +1130,12 @@ export function useOpenAIVoiceChat(
         setIsListening(true);
         setIsLoading(false);
 
-        const menuName = sessionInfo?.user_profile?.menu || "요리";
         const promptForAssistant =
-          `지금부터 너는 먼저 인사하고, 자기소개하고, 손 씻으라고 안내해. `;
+          `너는 친절한 요리 친구 셰프얌이야. 반말로 밝게 인사하고 자기소개한 뒤, 요리 시작 전에 손을 깨끗이 씻고 오자고 안내해줘. 손을 씻고 나면 1단계부터 시작할 거니까 준비되면 알려달라고 해줘.`;
 
         // UI에는 굳이 안 찍고, 모델에게만 user 발화로 보냄
         setTimeout(() => {
-          sendTextToLLM(promptForAssistant, true);  // user 역할로 전송
+          sendTextToLLM(promptForAssistant, true); // user 역할로 전송
           setInitialGreetingSent(true);
         }, 500);
       });
@@ -956,13 +1155,13 @@ export function useOpenAIVoiceChat(
         setIsActive(false);
         setIsListening(false);
       });
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
       if (!offer.sdp) {
         throw new Error("Failed to generate WebRTC SDP offer");
       }
-
       // 최신 OpenAI Realtime WebRTC calls 엔드포인트로 SDP 교환 (실패 시 기본 엔드포인트 폴백)
       let sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",

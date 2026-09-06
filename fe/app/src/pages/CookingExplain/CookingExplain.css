@@ -1,175 +1,68 @@
-/* ===== 레이아웃 ===== */
-.complete-page {
+.cooking-page {
   min-height: 100vh;
   background: #fdf9f3;
-  padding: 20px 16px 28px;
+  padding: 18px 16px 42px;
   box-sizing: border-box;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
+  color: #2d2926;
+  overflow-y: auto;
 }
 
-.complete-header {
-  width: 100%;
-  max-width: 430px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.cooking-page > * { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+.cooking-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.cooking-header .logo { height: 42px; width: auto; }
+.back-button, .header-spacer { width: 42px; }
+.back-button { height: 42px; border: 0; border-radius: 50%; background: #fff; font-size: 22px; cursor: pointer; }
+
+.recipe-heading { display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: center; margin-bottom: 16px; }
+.recipe-heading > img { width: 92px; height: 92px; border-radius: 18px; object-fit: cover; background: #f3ede6; }
+.recipe-heading h1 { margin: 5px 0 4px; font-size: 22px; }
+.recipe-heading p { margin: 0; color: #746b64; font-size: 14px; line-height: 1.4; }
+.video-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #fff0e4; color: #e87522; font-size: 11px; font-weight: 800; }
+.recipe-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: #675e57; }
+
+.video-section { margin-bottom: 14px; }
+.video-section iframe { display: block; width: 100% !important; height: auto !important; aspect-ratio: 16 / 9; border: 0; border-radius: 18px; background: #111; }
+.yt-fallback, .timeline-notice { margin: 8px 4px 0; font-size: 12px; line-height: 1.4; color: #796f67; }
+.yt-fallback a { color: #ec7d2d; font-weight: 800; }
+.timeline-notice { padding: 9px 12px; border-radius: 10px; background: #fff3d9; color: #765a21; }
+.recipe-main-image { display: block; max-height: 300px; object-fit: cover; border-radius: 18px; margin-bottom: 14px; }
+
+.step-card { box-sizing: border-box; background: #fff; border: 2px solid #ffd4b3; border-radius: 18px; padding: 18px; box-shadow: 0 7px 24px rgba(235, 135, 78, .12); }
+.step-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.step-title-row h2 { margin: 0; color: #f18130; font-size: 19px; }
+.step-title-row h2 small { color: #a89d94; font-size: 12px; }
+.step-title-row > span { font-size: 12px; color: #8b8078; }
+.step-card p { margin: 12px 0 0; font-size: 17px; line-height: 1.55; font-weight: 700; }
+
+.cooking-controls { display: grid; grid-template-columns: 1fr auto 1fr; gap: 9px; margin-top: 14px; }
+.cooking-controls button { min-height: 44px; padding: 9px 13px; border: 0; border-radius: 999px; background: #ff9844; color: #fff; font-weight: 800; cursor: pointer; }
+.cooking-controls button:disabled { opacity: .35; cursor: default; }
+.cooking-controls .replay-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: #fff; border: 2px solid #ff9844; color: #ed7d28; }
+
+.step-list { display: flex; gap: 7px; overflow-x: auto; padding: 14px 2px 5px; }
+.step-list button { flex: 0 0 34px; height: 34px; border: 0; border-radius: 50%; background: #eee6df; color: #766b63; font-weight: 800; cursor: pointer; }
+.step-list button.active { background: #ff9844; color: #fff; box-shadow: 0 4px 10px rgba(255, 152, 68, .35); }
+
+.voice-card { box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; padding: 16px; border-radius: 18px; color: #fff; background: linear-gradient(110deg, #ffad69, #ff8534); }
+.voice-card h2 { margin: 0 0 4px; font-size: 17px; }
+.voice-card p { margin: 0; font-size: 12px; line-height: 1.4; }
+.voice-card button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 10px 13px; background: #fff; color: #ec7928; font-weight: 900; cursor: pointer; }
+.voice-card button:disabled { opacity: .55; cursor: wait; }
+.voice-card .stop-btn { color: #d4493f; }
+.voice-error { color: #bd332b; font-size: 13px; }
+.assistant-bubble { box-sizing: border-box; margin-top: 10px; padding: 13px 15px; border-radius: 16px 16px 16px 4px; background: #fff; line-height: 1.45; }
+
+.recipe-detail-card { box-sizing: border-box; margin-top: 16px; background: #fff; border-radius: 16px; padding: 14px 16px; }
+.recipe-detail-card summary { color: #e97828; font-weight: 900; cursor: pointer; }
+.recipe-detail-card h3 { margin: 14px 0 5px; font-size: 14px; }
+.recipe-detail-card p { margin: 0; color: #6d645d; line-height: 1.55; }
+
+.cooking-state { display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+.cooking-state button { border: 0; border-radius: 999px; padding: 11px 18px; background: #ff9844; color: white; font-weight: 800; }
+
+@media (max-width: 380px) {
+  .recipe-heading { grid-template-columns: 72px 1fr; }
+  .recipe-heading > img { width: 72px; height: 72px; }
+  .step-card p { font-size: 16px; }
 }
-
-.logo {
-  height: 48px;
-  user-select: none;
-}
-
-/* ===== 메인 아이콘 (원형 카드) ===== */
-.main-icon {
-  width: 220px;
-  height: 220px;
-  border-radius: 200px;
-  background:
-    linear-gradient(99.78deg, #FFB173 15.81%, #FF9844 99.79%),
-    radial-gradient(77.75% 77.75% at 50% 50%, #FCB879 0%, #F6A057 100%);
-  box-shadow: 8px 8px 32px rgba(235, 135, 78, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: pulse 2s infinite ease-in-out;
-  margin-top: 4px;
-}
-
-.cooking-img {
-  width: 120px;
-  height: auto;
-  animation: glow 2s infinite ease-in-out;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.05); }
-}
-
-@keyframes glow {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(255,255,255,.65)); }
-  50%      { filter: drop-shadow(0 0 14px rgba(255,255,255,.9)); }
-}
-
-/* ===== 유튜브 영역 (반응형) ===== */
-.cooking-video {
-  width: 100%;
-  max-width: 430px;
-}
-
-.cooking-video iframe {
-  display: block;
-  width: 100% !important;
-  height: auto !important;
-  aspect-ratio: 16 / 9;
-  border: 0;
-  border-radius: 12px;
-  background: #000;
-}
-
-/* 임베딩 금지 안내 */
-.yt-fallback {
-  width: 100%;
-  max-width: 430px;
-  margin-top: 8px;
-  font-size: 14px;
-  color: #444;
-}
-.yt-fallback a {
-  color: #ff7f2e;
-  font-weight: 700;
-  text-decoration: underline;
-}
-
-/* ===== 영상 제어 버튼 ===== */
-.cooking-controls {
-  width: 100%;
-  max-width: 430px;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-
-.cooking-controls button {
-  padding: 9px 16px;
-  border-radius: 28px;
-  border: 0;
-  background: #ff9844;
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .2s ease, transform .05s ease;
-}
-.cooking-controls button:hover { background: #e6761e; }
-.cooking-controls button:active { transform: translateY(1px); }
-
-/* ===== 음성 제어 버튼 ===== */
-.control-buttons {
-  width: 100%;
-  max-width: 430px;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.control-buttons .play-btn,
-.control-buttons .stop-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 28px;
-  border: 0;
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter .2s ease, transform .05s ease;
-}
-
-.control-buttons .play-btn { background: #4caf50; }
-.control-buttons .play-btn:hover { filter: brightness(0.95); }
-
-.control-buttons .stop-btn { background: #f44336; }
-.control-buttons .stop-btn:hover { filter: brightness(0.95); }
-
-.control-buttons .play-btn:active,
-.control-buttons .stop-btn:active { transform: translateY(1px); }
-
-/* ===== 대화 로그 카드 ===== */
-.card {
-  width: 100%;
-  max-width: 430px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.08);
-  padding: 14px;
-  margin-top: 12px;
-}
-
-.card h2 {
-  font-size: 15px;
-  font-weight: 800;
-  margin-bottom: 6px;
-  color: #333;
-}
-
-.card pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 14px;
-  color: #333;
-  line-height: 1.5;
-}
-
-/* ===== 안전핀: 이미지/비디오가 카드 밖으로 새지 않도록 ===== */
-.complete-page img,
-.complete-page video { max-width: 100%; height: auto; display: block; }
