@@ -10,10 +10,10 @@ be/conversation_logs/
 
 # md 파일
 *.md
+!be/custom_voice/README.md
 
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-

@@ -1,9 +1,15 @@
-"""Voice AI Agent 핵심 평가지표 측정 및 벤치마크 평가 스크립트.
+"""Realtime API와 Custom cascade를 같은 지표로 평가하는 CLI.
 
-실행 방법:
-    python be/evaluate_voice_metrics.py --mode benchmark
-    python be/evaluate_voice_metrics.py --mode analyze-logs
+사용 예:
+    python be/evaluate_voice_metrics.py --mode benchmark --architecture custom_cascade
+    python be/evaluate_voice_metrics.py --mode compare
+    python be/evaluate_voice_metrics.py --mode analyze-logs --architecture both
+
+``benchmark``는 evaluator 배선을 빠르게 확인하는 합성 부하다. 실제 품질 비교에는
+두 구현으로 동일한 음성 corpus를 재생한 뒤 ``analyze-logs``를 사용해야 한다.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -11,153 +17,215 @@ from pathlib import Path
 import random
 import sys
 import time
+from typing import Any
 
-# 상위 경로 등록
+
+# 프로젝트 루트가 아닌 ``be`` 폴더에서 실행해도 services import가 되게 한다.
 sys.path.append(str(Path(__file__).resolve().parent))
 
-from services.voice_metrics import VoiceMetricsTracker, TurnMetrics
+from services.voice_metrics import VoiceMetricsTracker
 
 
-def print_banner(title: str):
-    print("\n" + "=" * 70)
-    print(f"  📊 {title}")
-    print("=" * 70)
+# 합성 benchmark는 구조별 예상 지연 구간만 다르고 시나리오와 evaluator는 동일하다.
+ARCHITECTURE_PROFILES: dict[str, dict[str, tuple[float, float]]] = {
+    "realtime": {
+        "stt": (0.08, 0.16),
+        "llm": (0.10, 0.20),
+        "tts": (0.04, 0.09),
+        "finish": (0.08, 0.14),
+    },
+    "custom_cascade": {
+        "stt": (0.15, 0.28),
+        "llm": (0.12, 0.25),
+        "tts": (0.06, 0.13),
+        "finish": (0.10, 0.18),
+    },
+}
 
 
-def print_metrics_table(summary: dict):
-    """지표 요약을 보기 쉬운 표 형태로 터미널에 출력."""
-    session_id = summary.get("session_id", "N/A")
-    total_turns = summary.get("total_turns", 0)
-    ux_score = summary.get("estimated_voice_ux_score", 0.0)
-    
-    print(f"\n[세션 ID]: {session_id} | [총 대화 턴]: {total_turns}회 | [예상 Voice UX 만족도]: {ux_score} / 5.0")
-    print("-" * 70)
-    print(f"{'지표명 (Metric)':<32} | {'Mean':>8} | {'P50(Med)':>8} | {'P90':>8} | {'P95':>8}")
-    print("-" * 70)
+SCENARIOS: list[dict[str, Any]] = [
+    {"user": "오늘 잔치국수 만들래", "resp": "좋아! 먼저 손을 씻고 준비되면 말해 줘.", "tokens": 23, "dur": 1800},
+    {"user": "다 불렸어", "resp": "잘했어! 이제 물을 넣고 끓이자.", "tokens": 20, "dur": 1400},
+    {"user": "3분 타이머 맞춰 줘", "resp": "3분 타이머를 시작했어.", "tokens": 16, "dur": 1600, "tool": "start_timer"},
+    {"user": "그다음은 뭐야", "resp": "다음 단계를 화면에 보여 줄게.", "tokens": 19, "dur": 2000, "tool": "navigate_cooking_step"},
+    {"user": "완성했어 고마워", "resp": "정말 멋지다! 맛있게 먹어.", "tokens": 18, "dur": 1500},
+]
 
+
+def print_banner(title: str) -> None:
+    """CLI 섹션 경계를 일관된 너비로 표시한다."""
+
+    print("\n" + "=" * 78)
+    print(f"  {title}")
+    print("=" * 78)
+
+
+def print_metrics_table(summary: dict[str, Any]) -> None:
+    """공용 VoiceMetricsTracker summary를 구조와 무관한 표로 출력한다."""
+
+    architecture = summary.get("architecture", "realtime")
+    print(
+        f"\n[구조] {architecture} | [세션] {summary.get('session_id', 'N/A')} | "
+        f"[턴] {summary.get('total_turns', 0)} | "
+        f"[예상 Voice UX] {summary.get('estimated_voice_ux_score', 0.0)} / 5.0"
+    )
+    print("-" * 78)
+    print(f"{'Metric':<32} | {'Mean':>9} | {'P50':>9} | {'P90':>9} | {'P95':>9}")
+    print("-" * 78)
+
+    labels = [
+        ("TTFT", "ttft (time_to_first_token)"),
+        ("TTFA", "ttfa (time_to_first_audio)"),
+        ("STT latency", "stt_latency"),
+        ("E2E turn latency", "e2e_turn_latency"),
+        ("Barge-in latency", "barge_in_latency"),
+        ("Tool execution latency", "tool_execution_latency"),
+    ]
     latencies = summary.get("latency_metrics_ms", {})
-    metric_names = [
-        ("TTFT (첫 토큰 생성 지연)", "ttft (time_to_first_token)"),
-        ("TTFA (첫 오디오 출력 지연)", "ttfa (time_to_first_audio)"),
-        ("STT Latency (음성인식 전사)", "stt_latency"),
-        ("E2E Turn Latency (전체응답)", "e2e_turn_latency"),
-        ("Barge-in Latency (끼어들기)", "barge_in_latency"),
-        ("Tool Latency (도구 실행)", "tool_execution_latency"),
-    ]
-
-    for label, key in metric_names:
+    for label, key in labels:
         stats = latencies.get(key, {})
-        mean = f"{stats.get('mean')}ms" if stats.get('mean') is not None else "-"
-        p50 = f"{stats.get('p50')}ms" if stats.get('p50') is not None else "-"
-        p90 = f"{stats.get('p90')}ms" if stats.get('p90') is not None else "-"
-        p95 = f"{stats.get('p95')}ms" if stats.get('p95') is not None else "-"
-        print(f"{label:<32} | {mean:>8} | {p50:>8} | {p90:>8} | {p95:>8}")
+        values = [f"{stats.get(percentile):.1f}ms" if stats.get(percentile) is not None else "-" for percentile in ("mean", "p50", "p90", "p95")]
+        print(f"{label:<32} | {values[0]:>9} | {values[1]:>9} | {values[2]:>9} | {values[3]:>9}")
 
-    print("-" * 70)
-    tps = summary.get("throughput_and_efficiency", {}).get("tokens_per_second (tps)", {})
-    rtf = summary.get("throughput_and_efficiency", {}).get("real_time_factor (rtf)", {})
-    print(f"{'생성 속도 (TPS)':<32} | {str(tps.get('mean', '-')) + ' tps':>8} (P50: {str(tps.get('p50', '-'))})")
-    print(f"{'실시간 계수 (RTF, <1.0)':<32} | {str(rtf.get('mean', '-')):>8} (P50: {str(rtf.get('p50', '-'))})")
-    
-    tools = summary.get("tool_call_metrics", {})
-    print(f"{'도구 호출 성공률':<32} | {str(tools.get('success_rate_pct', '-')) + '%':>8} (총 {tools.get('total_calls', 0)}회)")
-    print("=" * 70 + "\n")
+    tool_metrics = summary.get("tool_call_metrics", {})
+    throughput = summary.get("throughput_and_efficiency", {})
+    tps = throughput.get("tokens_per_second (tps)", {}).get("mean")
+    rtf = throughput.get("real_time_factor (rtf)", {}).get("mean")
+    print("-" * 78)
+    print(f"TPS mean: {tps if tps is not None else '-'}")
+    print(f"RTF mean: {rtf if rtf is not None else '-'}")
+    print(
+        f"Tool success: {tool_metrics.get('success_rate_pct', '-')}% "
+        f"({tool_metrics.get('total_calls', 0)} calls)"
+    )
 
 
-def run_synthetic_benchmark():
-    """모의 음성 대화 시나리오(5턴)를 통한 Voice AI Agent 지표 측정 시뮬레이션."""
-    print_banner("Voice AI Agent 핵심 평가지표 시뮬레이션 벤치마크")
-    
-    tracker = VoiceMetricsTracker(session_id="sim_bench_voice_session_001")
+def run_synthetic_benchmark(architecture: str) -> dict[str, Any]:
+    """동일 시나리오로 선택 구조의 측정/요약 코드가 정상 연결됐는지 확인한다."""
 
-    scenarios = [
-        {"user": "오늘 떡볶이 만들래", "resp": "좋아! 먼저 떡을 물에 10분 동안 불려놓을까? 준비되면 말해줘.", "tokens": 42, "dur": 1800},
-        {"user": "떡 다 불렸어", "resp": "잘했어! 이제 냄비에 물 500ml랑 고추장을 넣고 끓이자. 불 조심해!", "tokens": 48, "dur": 1400},
-        {"user": "3분 타이머 맞춰줘", "resp": "3분 타이머 시작했어. 끓는 동안 어묵을 한 입 크기로 썰어보자.", "tokens": 36, "dur": 1600, "tool": "start_timer"},
-        {"user": "어묵 다 썰었어 다음은?", "resp": "끓는 양념에 떡과 어묵을 넣고 중불에서 5분간 더 끓여줘.", "tokens": 45, "dur": 2000},
-        {"user": "완성됐어 고마워", "resp": "정말 맛있겠다! 그릇에 예쁘게 담고 맛있게 먹어!", "tokens": 30, "dur": 1500},
-    ]
+    if architecture not in ARCHITECTURE_PROFILES:
+        raise ValueError(f"Unsupported architecture: {architecture}")
+    print_banner(f"Synthetic voice benchmark: {architecture}")
+    profile = ARCHITECTURE_PROFILES[architecture]
+    tracker = VoiceMetricsTracker(session_id=f"sim_{architecture}_001")
 
-    for idx, sc in enumerate(scenarios, 1):
-        print(f"👉 [Turn {idx}] 시뮬레이션 중: '{sc['user']}' -> '{sc['resp'][:20]}...'")
-        tracker.start_turn(turn_id=idx)
-        
-        # 1. 사용자 발화 종료 (VAD)
-        time.sleep(0.01)
-        tracker.mark_user_speech_end(audio_duration_ms=sc["dur"])
+    # CI와 로컬에서 비교 결과가 재현되도록 구조 이름으로 난수 seed를 고정한다.
+    random.seed(architecture)
+    for index, scenario in enumerate(SCENARIOS, start=1):
+        print(f"[Turn {index}] {scenario['user']}")
+        tracker.start_turn(turn_id=index)
+        time.sleep(0.005)
+        tracker.mark_user_speech_end(audio_duration_ms=scenario["dur"])
 
-        # 2. STT 변환 완료 (평균 150~300ms 시뮬레이션)
-        stt_dur = random.uniform(0.15, 0.28)
-        time.sleep(stt_dur)
-        tracker.mark_stt_completed(transcript=sc["user"])
+        time.sleep(random.uniform(*profile["stt"]))
+        tracker.mark_stt_completed(transcript=scenario["user"])
 
-        # 3. 도구 호출 시뮬레이션 (해당되는 경우)
-        if "tool" in sc:
-            call_id = f"call_{idx}"
-            tracker.start_tool_call(sc["tool"], call_id)
-            time.sleep(0.08)
-            tracker.end_tool_call(sc["tool"], call_id, success=True)
+        if scenario.get("tool"):
+            call_id = f"{architecture}_call_{index}"
+            tracker.start_tool_call(scenario["tool"], call_id)
+            time.sleep(0.05)
+            tracker.end_tool_call(scenario["tool"], call_id, success=True)
 
-        # 4. LLM 첫 토큰 도착 (TTFT: 300~600ms)
-        llm_ttft = random.uniform(0.12, 0.25)
-        time.sleep(llm_ttft)
+        time.sleep(random.uniform(*profile["llm"]))
         tracker.mark_first_token()
-
-        # 5. 첫 오디오 출력 (TTFA: +50~150ms)
-        time.sleep(0.08)
+        time.sleep(random.uniform(*profile["tts"]))
         tracker.mark_first_audio()
-
-        # 6. 전체 응답 완료
-        time.sleep(0.15)
+        time.sleep(random.uniform(*profile["finish"]))
         tracker.end_turn(
-            agent_response=sc["resp"],
+            agent_response=scenario["resp"],
             input_tokens=random.randint(120, 200),
-            output_tokens=sc["tokens"],
-            agent_audio_duration_ms=sc["dur"] * 1.2,
+            output_tokens=scenario["tokens"],
+            agent_audio_duration_ms=scenario["dur"] * 1.2,
         )
 
     summary = tracker.compute_summary()
+    summary["architecture"] = architecture
     print_metrics_table(summary)
     return summary
 
 
-def analyze_existing_logs():
-    """저장된 conversation_logs/*.json 파일들을 분석하여 지표 요약."""
+def compare_summaries(summaries: list[dict[str, Any]]) -> None:
+    """A/B 판단에 중요한 p50 지표를 같은 행에 놓아 비교한다."""
+
+    print_banner("Realtime vs Custom cascade (synthetic wiring check)")
+    print(f"{'Architecture':<20} | {'STT p50':>10} | {'TTFT p50':>10} | {'TTFA p50':>10} | {'E2E p50':>10}")
+    print("-" * 78)
+    for summary in summaries:
+        latency = summary.get("latency_metrics_ms", {})
+
+        def p50(key: str) -> str:
+            value = latency.get(key, {}).get("p50")
+            return f"{value:.1f}ms" if value is not None else "-"
+
+        print(
+            f"{summary.get('architecture', 'unknown'):<20} | "
+            f"{p50('stt_latency'):>10} | "
+            f"{p50('ttft (time_to_first_token)'):>10} | "
+            f"{p50('ttfa (time_to_first_audio)'):>10} | "
+            f"{p50('e2e_turn_latency'):>10}"
+        )
+
+
+def analyze_existing_logs(architecture: str = "both") -> list[dict[str, Any]]:
+    """실제 conversation log를 구조별로 필터링해 저장된 metrics summary를 출력한다."""
+
     log_dir = Path(__file__).resolve().parent / "conversation_logs"
-    if not log_dir.exists():
-        print(f"⚠️ 로그 폴더가 존재하지 않습니다: {log_dir}")
-        return
-
-    json_files = list(log_dir.glob("*.json"))
+    json_files = sorted(log_dir.glob("*.json"), reverse=True) if log_dir.exists() else []
     if not json_files:
-        print(f"⚠️ {log_dir} 에 저장된 JSON 로그 파일이 없습니다.")
-        return
+        print(f"분석할 로그가 없습니다: {log_dir}")
+        return []
 
-    print_banner(f"저장된 대화 세션 로그 분석 (총 {len(json_files)}개 파일)")
-    
-    for f in json_files[:5]:  # 최근 5개 파일
+    selected: list[dict[str, Any]] = []
+    for path in json_files:
         try:
-            with open(f, "r", encoding="utf-8") as fp:
-                data = json.load(fp)
-                summary = data.get("metrics_summary")
-                session_id = data.get("session_id", f.stem)
-                entries = data.get("entries", [])
-                
-                print(f"📄 파일: {f.name} | 세션: {session_id} | 엔트리 수: {len(entries)}")
-                if summary:
-                    print_metrics_table(summary)
-                else:
-                    print("   ℹ️ 이 세션은 metrics_summary가 아직 기록되지 않은 레거시 세션입니다.")
-        except Exception as e:
-            print(f"❌ 파일 읽기 실패 ({f.name}): {e}")
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"로그 읽기 실패 ({path.name}): {exc}")
+            continue
+
+        # architecture 필드가 없는 과거 로그는 기존 Realtime 세션으로 간주한다.
+        log_architecture = data.get("architecture", "realtime")
+        if architecture != "both" and log_architecture != architecture:
+            continue
+        summary = data.get("metrics_summary")
+        if not summary:
+            continue
+        summary.setdefault("architecture", log_architecture)
+        selected.append(summary)
+
+    print_banner(f"Saved session analysis: {architecture} ({len(selected)} sessions)")
+    for summary in selected[:10]:
+        print_metrics_table(summary)
+    return selected
+
+
+def main() -> None:
+    """CLI 인자를 실제/합성 평가 경로로 전달한다."""
+
+    parser = argparse.ArgumentParser(description="Voice AI architecture metrics evaluator")
+    parser.add_argument(
+        "--mode",
+        choices=["benchmark", "compare", "analyze-logs"],
+        default="benchmark",
+        help="합성 단일 평가, 합성 A/B 비교, 저장된 실제 로그 분석",
+    )
+    parser.add_argument(
+        "--architecture",
+        choices=["realtime", "custom_cascade", "both"],
+        default="both",
+        help="평가할 음성 구조",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "analyze-logs":
+        analyze_existing_logs(args.architecture)
+        return
+    if args.mode == "compare" or args.architecture == "both":
+        summaries = [run_synthetic_benchmark(name) for name in ("realtime", "custom_cascade")]
+        compare_summaries(summaries)
+        return
+    run_synthetic_benchmark(args.architecture)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Voice AI Agent Metrics Evaluator")
-    parser.add_argument("--mode", choices=["benchmark", "analyze-logs"], default="benchmark", help="실행 모드")
-    args = parser.parse_args()
-
-    if args.mode == "benchmark":
-        run_synthetic_benchmark()
-    elif args.mode == "analyze-logs":
-        analyze_existing_logs()
+    main()
