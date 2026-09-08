@@ -5,7 +5,7 @@ import { FaPlay, FaRedo, FaStop } from "react-icons/fa";
 
 import topLogo from "../../assets/top_logo.png";
 import { api } from "../../lib/api";
-import { useOpenAIVoiceChat } from "../../lib/ai/speech/open-ai/use-voice-chat.openai";
+import { useVoiceChat } from "../../lib/ai/speech/use-voice-chat";
 import "./CookingExplain.css";
 
 const getVideoId = (url) => {
@@ -90,7 +90,7 @@ export default function CookingExplain() {
     }
   }, [moveToStep, steps.length]);
 
-  const voiceChat = useOpenAIVoiceChat({
+  const voiceChat = useVoiceChat({
     userId,
     recipeId,
     onAssistantEvent: handleAssistantEvent,

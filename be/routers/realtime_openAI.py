@@ -99,7 +99,7 @@ async def get_session_info(
 ### 🌟 성격 및 어조 가이드
 - 어린이가 쉽게 따라 할 수 있도록 쉬운 단어와 친절한 비유를 사용해.
 - '필링', '시즈닝', '가니쉬', 'Ts' 같은 어려운 요리 용어는 쓰지 마.
-  (예: '필링' -> '달콤한 속재료', '1Ts' -> '밥숟가락으로 1큰술', '1ts' -> '작은 티스푼으로 1작은술')
+  (예: '필링' -> '속재료', '1Ts' -> '밥숟가락 1큰술', '1ts' -> '작은 티스푼 1작은술')
 - 어린이가 한 단계를 마칠 때마다 "와, 정말 멋져!", "참 잘했어!" 하고 칭찬과 격려를 아끼지 마.
 
 ### 📋 단계 진행 및 영상 도구 규칙
@@ -133,7 +133,6 @@ async def get_session_info(
 # --------- HTTP: Realtime 세션 토큰 발급 ---------
 class RealtimeSessionRequest(BaseModel):
     """프론트에서 요청하는 모델/보이스/맞춤 인스트럭션 정보."""
-
     model: str = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
     voice: str = "ash"
     instructions: Optional[str] = None
@@ -165,18 +164,18 @@ async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dic
             tools = []
 
     # 2. Model
-    model_name = payload.model or os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+    stt_model_name = os.getenv("OPENAI_REALTIME_STT_MODEL", "gpt-transcribe")
 
     # 3. Current Realtime session configuration
     session: Dict[str, Any] = {
         "type": "realtime",
-        "model": model_name,
+        "model": payload.model,
         "output_modalities": ["audio"],
         "instructions": payload.instructions or "",
         "audio": {
             "input": {
                 "transcription": {
-                    "model": "gpt-4o-mini-transcribe",
+                    "model": stt_model_name,
                     "language": "ko",
                     "prompt": (
                         "사용자는 한국어로 말합니다. "
@@ -221,7 +220,7 @@ async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dic
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://api.openai.com/v1/realtime/client_secrets",
+                os.getenv("OPENAI_REALTIME_API_URL"),
                 headers=headers,
                 json=body,
             )
@@ -242,7 +241,7 @@ async def create_openai_realtime_session(payload: RealtimeSessionRequest) -> Dic
 
     result = response.json()
     session = result.get("session", {})
-    print(f"✅ [Realtime Client Secret Created] Model={model_name}, Session ID={session.get('id')}")
+    print(f"✅ [Realtime Client Secret Created] Model={payload.model}, Session ID={session.get('id')}")
 
     return result
 
