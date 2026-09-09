@@ -56,6 +56,7 @@ class CustomTraceStore:
         self.ended_at: Optional[str] = None
         self.turns: list[TurnTrace] = []
         self.entries: list[dict[str, Any]] = []
+        self.runtime_metrics: dict[str, Any] = {}
         self._active: Optional[TurnTrace] = None
         # 테스트/배포에서 저장 위치를 바꿀 수 있지만 기본값은 기존 평가 로그 폴더다.
         self.log_dir = log_dir or (Path(__file__).resolve().parents[1] / "conversation_logs")
@@ -123,6 +124,7 @@ class CustomTraceStore:
             "system_prompt": self.system_prompt,
             "entries": self.entries,
             "metrics_summary": summary,
+            "runtime_metrics": self.runtime_metrics,
             "turn_traces": [asdict(turn) for turn in self.turns],
         }
         self.log_dir.mkdir(parents=True, exist_ok=True)

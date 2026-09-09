@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 import random
@@ -24,6 +25,7 @@ from typing import Any
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from services.voice_metrics import VoiceMetricsTracker
+from custom_voice.noise_evaluation import print_noise_summary, run_noise_suppression_benchmark
 
 
 # 합성 benchmark는 구조별 예상 지연 구간만 다르고 시나리오와 evaluator는 동일하다.
@@ -205,7 +207,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Voice AI architecture metrics evaluator")
     parser.add_argument(
         "--mode",
-        choices=["benchmark", "compare", "analyze-logs"],
+        choices=["benchmark", "compare", "analyze-logs", "noise-suppression"],
         default="benchmark",
         help="합성 단일 평가, 합성 A/B 비교, 저장된 실제 로그 분석",
     )
@@ -215,7 +217,45 @@ def main() -> None:
         default="both",
         help="평가할 음성 구조",
     )
+    parser.add_argument(
+        "--corpus-manifest",
+        type=Path,
+        help="noise-suppression mode에서 사용할 aligned clean/noisy JSONL manifest",
+    )
+    parser.add_argument(
+        "--noise-configs",
+        default="no_noise_suppression,browser_ns,browser_aec_rnnoise,browser_aec_deepfilternet",
+        help="쉼표로 구분한 noise suppression 실험 configuration",
+    )
+    parser.add_argument(
+        "--skip-stt",
+        action="store_true",
+        help="외부 STT 비용 없이 VAD/PESQ/STOI/runtime cost만 평가",
+    )
+    parser.add_argument(
+        "--allow-partial-noise-corpus",
+        action="store_true",
+        help="필수 noise category 일부가 없는 개발용 corpus 허용",
+    )
     args = parser.parse_args()
+
+    if args.mode == "noise-suppression":
+        if args.corpus_manifest is None:
+            parser.error("--mode noise-suppression requires --corpus-manifest")
+        configs = [value.strip() for value in args.noise_configs.split(",") if value.strip()]
+        results = asyncio.run(
+            run_noise_suppression_benchmark(
+                args.corpus_manifest,
+                configs,
+                run_stt=not args.skip_stt,
+                allow_partial_corpus=args.allow_partial_noise_corpus,
+            )
+        )
+        print_noise_summary(results)
+        output_path = args.corpus_manifest.with_name("noise_suppression_results.json")
+        output_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\n상세 결과: {output_path}")
+        return
 
     if args.mode == "analyze-logs":
         analyze_existing_logs(args.architecture)
