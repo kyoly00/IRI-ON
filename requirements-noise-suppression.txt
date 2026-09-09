@@ -1,0 +1,7 @@
+# Optional only: the default CUSTOM_VOICE_NOISE_SUPPRESSION=browser path does not need these.
+deepfilternet
+pesq
+pystoi
+
+# RNNoise is loaded through its native C ABI. Build xiph/rnnoise separately and set
+# CUSTOM_VOICE_RNNOISE_LIBRARY to the resulting rnnoise.dll/librnnoise.so path.

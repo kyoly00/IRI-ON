@@ -13,6 +13,7 @@ from db.session import SessionLocal
 
 from .config import CustomVoiceSettings
 from .context import build_session_context
+from .noise_suppression import NoiseSuppressionError
 from .providers import ProviderError
 from .runtime import CustomVoiceRuntime
 
@@ -51,10 +52,15 @@ async def get_custom_voice_session_info(user_id: int, recipe_id: int) -> dict[st
         context = _load_context(user_id, recipe_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    settings = CustomVoiceSettings.from_env()
     return {
         **context,
         "architecture": "custom_cascade",
         "protocol": "pcm_s16le_mono_websocket_v1",
+        "noise_suppression": settings.noise_suppression,
+        "input_sample_rate": settings.transport_sample_rate,
+        "input_frame_ms": settings.transport_frame_ms,
+        "browser_audio_constraints": settings.browser_audio_constraints,
     }
 
 
@@ -77,7 +83,7 @@ async def custom_voice_websocket(
             system_prompt=context["system_prompt"],
             settings=CustomVoiceSettings.from_env(),
         )
-    except (LookupError, ProviderError, ValueError) as exc:
+    except (LookupError, NoiseSuppressionError, ProviderError, ValueError) as exc:
         # handshake 이전 오류도 브라우저가 읽을 수 있는 JSON event로 변환한다.
         await websocket.accept()
         await websocket.send_json({"type": "error", "message": str(exc)})

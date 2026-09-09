@@ -17,6 +17,31 @@ type CustomVoiceEvent = {
 
 
 /** 상대 URL도 WebSocket 생성자가 받을 수 있는 절대 ws/wss URL로 변환한다. */
+/**
+ * 브라우저가 Crypto.randomUUID를 제공하면 그대로 사용하고, 없으면 UUID v4를 만든다.
+ * 일부 모바일 브라우저와 HTTP 개발 환경에서는 crypto 객체가 있어도 randomUUID만 빠져 있다.
+ * getRandomValues도 없는 매우 오래된 환경의 난수는 trace/UI 식별에만 사용하며 인증에는 쓰지 않는다.
+ */
+function createBrowserUUID(): string {
+  const webCrypto = globalThis.crypto;
+
+  const bytes = new Uint8Array(16);
+  if (typeof webCrypto?.getRandomValues === "function") {
+    webCrypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  // UUID v4 version/variant bit를 설정해 backend의 UUID parser와 호환한다.
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+
 function absoluteWebSocketUrl(path: string): string {
   const configured = ws(path);
   if (configured.startsWith("ws://") || configured.startsWith("wss://")) return configured;
@@ -27,25 +52,78 @@ function absoluteWebSocketUrl(path: string): string {
 }
 
 
-/** AudioWorklet block 사이의 fractional phase를 보존하는 16 kHz PCM resampler. */
-class PCM16Downsampler {
+/**
+ * AudioContext가 요청 sample-rate를 제공하지 못할 때 사용하는 streaming windowed-sinc resampler.
+ * downsampling 시 cutoff를 target Nyquist 아래로 제한해 단순 sample skip의 aliasing을 피한다.
+ */
+class StreamingSincResampler {
   private readonly ratio: number;
-  private position = 0;
+  private readonly cutoff: number;
+  private readonly halfWidth = 16;
+  private buffer = new Float32Array(16);
+  private position = 16;
 
-  constructor(sourceRate: number, targetRate = 16_000) {
+  constructor(private readonly sourceRate: number, private readonly targetRate: number) {
     this.ratio = sourceRate / targetRate;
+    this.cutoff = Math.min(1, targetRate / sourceRate) * 0.92;
   }
 
-  push(input: Float32Array): ArrayBuffer {
-    const samples: number[] = [];
-    // position이 이전 128-sample block의 나머지를 기억해 장시간 sample-rate drift를 막는다.
-    while (this.position < input.length) {
-      const clamped = Math.max(-1, Math.min(1, input[Math.floor(this.position)] || 0));
-      samples.push(clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff);
+  push(input: Float32Array): Float32Array {
+    if (this.sourceRate === this.targetRate) return input;
+    const combined = new Float32Array(this.buffer.length + input.length);
+    combined.set(this.buffer);
+    combined.set(input, this.buffer.length);
+    const output: number[] = [];
+    while (this.position + this.halfWidth < combined.length) {
+      let weighted = 0;
+      let weightSum = 0;
+      const left = Math.floor(this.position) - this.halfWidth + 1;
+      const right = Math.floor(this.position) + this.halfWidth;
+      for (let index = left; index <= right; index += 1) {
+        if (index < 0 || index >= combined.length) continue;
+        const distance = this.position - index;
+        const x = Math.PI * distance * this.cutoff;
+        const sinc = Math.abs(x) < 1e-8 ? 1 : Math.sin(x) / x;
+        const window = 0.5 + 0.5 * Math.cos(Math.PI * distance / this.halfWidth);
+        const weight = this.cutoff * sinc * window;
+        weighted += combined[index] * weight;
+        weightSum += weight;
+      }
+      output.push(weightSum ? weighted / weightSum : 0);
       this.position += this.ratio;
     }
-    this.position -= input.length;
-    return Int16Array.from(samples).buffer;
+    const discard = Math.max(0, Math.floor(this.position) - this.halfWidth);
+    this.buffer = combined.slice(discard);
+    this.position -= discard;
+    return Float32Array.from(output);
+  }
+}
+
+
+/** Resampled audio를 정확한 20 ms PCM16 WebSocket frame으로 묶는 ring buffer. */
+class PCM16FrameEncoder {
+  private readonly resampler: StreamingSincResampler;
+  private readonly frameSamples: number;
+  private pending: number[] = [];
+
+  constructor(sourceRate: number, targetRate: number, frameMs: number) {
+    this.resampler = new StreamingSincResampler(sourceRate, targetRate);
+    this.frameSamples = Math.round(targetRate * frameMs / 1000);
+  }
+
+  push(input: Float32Array): ArrayBuffer[] {
+    this.pending.push(...this.resampler.push(input));
+    const frames: ArrayBuffer[] = [];
+    while (this.pending.length >= this.frameSamples) {
+      const values = this.pending.splice(0, this.frameSamples);
+      const pcm = new Int16Array(this.frameSamples);
+      values.forEach((value, index) => {
+        const clamped = Math.max(-1, Math.min(1, value || 0));
+        pcm[index] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+      });
+      frames.push(pcm.buffer);
+    }
+    return frames;
   }
 }
 
@@ -162,7 +240,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
         socketRef.current?.send(JSON.stringify({ type: "generate_greeting" }));
         break;
       case "user_speech_started": {
-        const id = crypto.randomUUID();
+        const id = createBrowserUUID();
         currentUserMessageIdRef.current = id;
         setIsUserSpeaking(true);
         setMessages((previous) => [
@@ -188,7 +266,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
       case "assistant_delta": {
         let id = currentAssistantMessageIdRef.current;
         if (!id) {
-          id = crypto.randomUUID();
+          id = createBrowserUUID();
           currentAssistantMessageIdRef.current = id;
           const newMessage: UIMessageWithCompleted = {
             id,
@@ -268,15 +346,33 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
 
   /** 브라우저 내장 AudioWorklet으로 microphone Float32 frame을 main thread에 전달한다. */
   const prepareAudioCapture = useCallback(async () => {
+    if (!sessionInfo) throw new Error("Custom voice session configuration is not loaded yet");
+    // localhost 이외의 HTTP origin에서는 브라우저가 mediaDevices 자체를 노출하지 않는다.
+    // 원래 TypeError 대신 해결 방법이 포함된 오류를 표시하고 권한 요청 전에 중단한다.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        `마이크 사용에는 secure context가 필요합니다. 모바일 Chrome의 ` +
+        `chrome://flags/#unsafely-treat-insecure-origin-as-secure에 ${window.location.origin}을 ` +
+        `정확히 등록하고 Chrome을 다시 시작하거나 HTTPS로 접속해 주세요.`,
+      );
+    }
+    const noiseMode = String(sessionInfo.noise_suppression || "browser");
+    const constraints = sessionInfo.browser_audio_constraints || {};
+    const targetSampleRate = Number(sessionInfo.input_sample_rate) || (
+      noiseMode === "rnnoise" || noiseMode === "deepfilternet" ? 48_000 : 16_000
+    );
+    const frameMs = Number(sessionInfo.input_frame_ms) || 20;
     const mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        // Deep NS와 browser NS를 겹치지 않는다. Deep mode는 AEC만 browser에 남긴다.
+        echoCancellation: Boolean(constraints.echo_cancellation ?? noiseMode !== "none"),
+        noiseSuppression: Boolean(constraints.noise_suppression ?? noiseMode === "browser"),
+        autoGainControl: Boolean(constraints.auto_gain_control ?? noiseMode !== "none"),
+        sampleRate: targetSampleRate,
       },
     });
-    const context = new AudioContext();
+    const context = new AudioContext({ sampleRate: targetSampleRate });
     await context.resume();
     const workletSource = `
       class CustomPCMProcessor extends AudioWorkletProcessor {
@@ -300,7 +396,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
 
     const source = context.createMediaStreamSource(mediaStream);
     const worklet = new AudioWorkletNode(context, "custom-pcm-processor");
-    const downsampler = new PCM16Downsampler(context.sampleRate);
+    const frameEncoder = new PCM16FrameEncoder(context.sampleRate, targetSampleRate, frameMs);
     const silentGain = context.createGain();
     silentGain.gain.value = 0;
     source.connect(worklet);
@@ -309,7 +405,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
     worklet.port.onmessage = (message: MessageEvent<Float32Array>) => {
       const socket = socketRef.current;
       if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(downsampler.push(message.data));
+        frameEncoder.push(message.data).forEach((frame) => socket.send(frame));
       }
     };
 
@@ -317,7 +413,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
     audioContextRef.current = context;
     workletNodeRef.current = worklet;
     silentGainRef.current = silentGain;
-  }, []);
+  }, [sessionInfo]);
 
   /** microphone track을 유지한 채 mute를 토글해 빠르게 듣기를 재개한다. */
   const startListening = useCallback(async () => {
@@ -338,7 +434,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
     setMessages([]);
     try {
       await prepareAudioCapture();
-      const sessionId = crypto.randomUUID();
+      const sessionId = createBrowserUUID();
       const socket = new WebSocket(
         absoluteWebSocketUrl(`/custom-voice/ws/${userId}/${recipeId}?session_id=${encodeURIComponent(sessionId)}`),
       );

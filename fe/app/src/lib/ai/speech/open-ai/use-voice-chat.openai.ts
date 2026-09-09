@@ -47,13 +47,33 @@ const createUIPart = (content: Content) => {
   };
 };
 
+function createBrowserUUID(): string {
+  const webCrypto = globalThis.crypto;
+
+  const bytes = new Uint8Array(16);
+  if (typeof webCrypto?.getRandomValues === "function") {
+    webCrypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  // UUID v4 version/variant bit를 설정해 backend의 UUID parser와 호환한다.
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+
 const createUIMessage = (payload: {
   id?: string;
   role: "user" | "assistant";
   content: Content;
   completed?: boolean;
 }): UIMessageWithCompleted => {
-  const id = payload.id ?? generateUUID();
+  const id = payload.id ?? createBrowserUUID();
   return {
     id,
     role: payload.role,
@@ -103,7 +123,7 @@ export function useOpenAIVoiceChat(
 
   // 대화 로깅 API 호출 함수들
   const startConversationLog = useCallback(async (systemPrompt?: string) => {
-    const sessionId = generateUUID();
+    const sessionId = createBrowserUUID();
     conversationLogSessionId.current = sessionId;
 
     try {
@@ -470,7 +490,7 @@ export function useOpenAIVoiceChat(
       return;
     }
 
-    const itemId = generateUUID();
+    const itemId = createBrowserUUID();
 
     // 시스템 메시지인 경우 (초기 인사 등) - 사용자 입력 없이 응답 생성만 요청
     if (isSystemMessage) {
@@ -1092,8 +1112,4 @@ export function useOpenAIVoiceChat(
     startListening,
     stopListening,
   };
-}
-
-function generateUUID(): string {
-  return crypto.randomUUID();
 }

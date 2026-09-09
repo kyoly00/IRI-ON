@@ -21,6 +21,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from .audio import AdaptiveEnergyEndpointDetector, ProsodyExtractor, ProsodyMetadata
 from .config import CustomVoiceSettings
+from .noise_suppression import (
+    AntiAliasResampler,
+    AudioFrame,
+    NoiseSuppressionError,
+    create_noise_suppressor,
+)
 from .privacy import PIIRedactor
 from .providers import OpenAIHttpProviders, ProviderError
 from .tools import TOOL_SCHEMAS, ToolExecutor
@@ -101,6 +107,12 @@ class CustomVoiceRuntime:
         self.websocket = websocket
         self.settings = settings
         self.detector = AdaptiveEnergyEndpointDetector(settings)
+        self.noise_suppressor = create_noise_suppressor(
+            settings.noise_suppression,
+            rnnoise_library=settings.rnnoise_library,
+            deepfilternet_model=settings.deepfilternet_model,
+        )
+        self.input_resampler = AntiAliasResampler(settings.transport_sample_rate, settings.input_sample_rate)
         self.prosody = ProsodyExtractor(settings.input_sample_rate)
         self.redactor = PIIRedactor()
         self.providers = OpenAIHttpProviders(settings)
@@ -110,6 +122,9 @@ class CustomVoiceRuntime:
         self._send_lock = asyncio.Lock()
         self._response_task: Optional[asyncio.Task[None]] = None
         self._speech_started_ts: Optional[float] = None
+        self._input_sequence = 0
+        self._input_sample_index = 0
+        self._audio_pipeline_failed = False
         self._closed = False
         self.state = SessionState.CONNECTING
 
@@ -118,19 +133,24 @@ class CustomVoiceRuntime:
 
         await self.websocket.accept()
         logger.info(
-            "[CustomVoice:%s] session started user=%s recipe=%s",
+            "[CustomVoice:%s] session started user=%s recipe=%s noise_suppression=%s transport_rate=%s",
             self.trace.session_id,
             self.trace.user_id,
             self.trace.recipe_id,
+            self.settings.noise_suppression,
+            self.settings.transport_sample_rate,
         )
         await self._send_json(
             {
                 "type": "session_ready",
                 "session_id": self.trace.session_id,
                 "architecture": self.trace.architecture,
-                "input_sample_rate": self.settings.input_sample_rate,
-                "input_frame_ms": self.settings.input_frame_ms,
+                "input_sample_rate": self.settings.transport_sample_rate,
+                "pipeline_sample_rate": self.settings.input_sample_rate,
+                "input_frame_ms": self.settings.transport_frame_ms,
                 "output_sample_rate": self.settings.output_sample_rate,
+                "noise_suppression": self.settings.noise_suppression,
+                "browser_audio_constraints": self.settings.browser_audio_constraints,
             }
         )
         await self._set_state(SessionState.LISTENING)
@@ -163,6 +183,8 @@ class CustomVoiceRuntime:
         if self.trace.active_turn is not None:
             self.trace.active_turn.response_completed_ts = time.time()
             self.trace.finish_turn()
+        await self.noise_suppressor.close()
+        self.trace.runtime_metrics["noise_suppression"] = self.noise_suppressor.stats.summary()
         await self.providers.close()
         path = self.trace.save()
         logger.info("[CustomVoice:%s] session closed trace=%s", self.trace.session_id, path)
@@ -194,9 +216,35 @@ class CustomVoiceRuntime:
         return False
 
     async def _handle_audio(self, pcm: bytes) -> None:
-        """PCM을 endpoint detector에 넣고 speech_start/turn_end 상태를 연결한다."""
+        """transport PCM에 optional NS/resampling을 적용한 뒤 VAD 상태를 연결한다."""
 
-        for event in self.detector.push(pcm):
+        if self._audio_pipeline_failed:
+            return
+        transport_frame = AudioFrame(
+            pcm=pcm,
+            sample_rate=self.settings.transport_sample_rate,
+            sequence=self._input_sequence,
+            sample_index=self._input_sample_index,
+            timestamp=time.time(),
+        )
+        self._input_sequence += 1
+        self._input_sample_index += transport_frame.samples
+        try:
+            suppressed = await self.noise_suppressor.process(transport_frame)
+            detector_frame = self.input_resampler.process(suppressed)
+        except NoiseSuppressionError as exc:
+            self._audio_pipeline_failed = True
+            logger.exception("[CustomVoice:%s] noise suppression failed: %s", self.trace.session_id, exc)
+            await self._send_json(
+                {
+                    "type": "error",
+                    "code": "noise_suppression_failed",
+                    "message": str(exc),
+                }
+            )
+            return
+
+        for event in self.detector.push(detector_frame.pcm):
             if event.kind == "speech_start":
                 self._speech_started_ts = time.time()
                 logger.info("[CustomVoice:%s] speech started", self.trace.session_id)

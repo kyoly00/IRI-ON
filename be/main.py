@@ -18,6 +18,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://192.168.1.103:5173",
     "http://192.168.68.77:5173",  # 이 부분을 추가하세요.
     "http://192.168.45.187:5173",  # 이 부분을 추가하세요.
 ]

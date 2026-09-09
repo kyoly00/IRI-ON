@@ -8,10 +8,12 @@ runtime이다. 기존 `be/routers/realtime_openAI.py`와 프런트 Realtime 훅�
 
 ```text
 Browser microphone
-  -> Web Audio AEC / noise suppression / AGC
+  -> Web Audio DSP selected by mode (browser NS OR AEC-only for deep NS)
   -> AudioWorklet (Float32)
-  -> 직접 downsample (16 kHz, mono, PCM s16le)
+  -> 20 ms ring framing (16 kHz browser/none, 48 kHz deep mode)
   -> /custom-voice/ws WebSocket
+  -> optional RNNoise / DeepFilterNet (48 kHz)
+  -> anti-alias FIR resampling (48 -> 16 kHz)
   -> AdaptiveEnergyEndpointDetector
        | speech_start -> 진행 중 LLM/TTS 취소 + playback_stop
        ` turn_end
@@ -30,6 +32,8 @@ Browser microphone
 
 - `config.py`: 모델, sample rate, VAD/endpoint 기준 환경 변수
 - `audio.py`: PCM framing, adaptive energy VAD, endpointing, prosody sidecar
+- `noise_suppression.py`: NS protocol, passthrough/RNNoise/DeepFilterNet adapter, FIR resampler
+- `noise_evaluation.py`: noisy corpus 기반 downstream 품질/runtime cost evaluator
 - `privacy.py`: 주민번호, 전화, 이메일, 카드번호 텍스트 마스킹
 - `providers.py`: 음성 SDK 대신 일반 HTTP로 호출하는 STT/LLM/TTS adapter
 - `tools.py`: 허용된 function tool 검증, 실행, UI event 변환
@@ -65,6 +69,36 @@ VITE_VOICE_IMPLEMENTATION=realtime
 - 환경에 따라 `CUSTOM_VOICE_VAD_MIN_RMS`, `CUSTOM_VOICE_SPEECH_START_FRAMES`,
   `CUSTOM_VOICE_MIN_UTTERANCE_RMS`를 조정할 수 있다.
 
+## Optional noise suppression
+
+기본값은 기존과 같은 browser NS이다.
+
+```dotenv
+CUSTOM_VOICE_NOISE_SUPPRESSION=browser
+# none | browser | rnnoise | deepfilternet
+```
+
+| 설정 | Browser DSP | 서버 입력 | 서버 처리 |
+|---|---|---:|---|
+| `none` | AEC/NS/AGC off | 16 kHz | passthrough |
+| `browser` | AEC + NS + AGC | 16 kHz | passthrough |
+| `rnnoise` | AEC + AGC, NS off | 48 kHz | RNNoise → FIR → 16 kHz |
+| `deepfilternet` | AEC + AGC, NS off | 48 kHz | DeepFilterNet → FIR → 16 kHz |
+
+RNNoise는 native C ABI를 직접 호출한다. 빌드한 `rnnoise.dll`/`librnnoise.so` 경로를
+`CUSTOM_VOICE_RNNOISE_LIBRARY`로 지정한다. RNNoise의 480-sample native frame 두 개가
+브라우저의 20 ms/960-sample frame 하나를 처리한다.
+
+DeepFilterNet과 객관 지표 패키지는 기본 설치를 무겁게 만들지 않도록 분리했다.
+
+```powershell
+pip install -r requirements-noise-suppression.txt
+```
+
+선택한 native backend가 없으면 browser mode로 몰래 fallback하지 않고 세션 시작/첫
+처리에서 명시적 오류를 보낸다. 이 방식으로 실험 configuration이 실제와 다르게
+기록되는 일을 막는다.
+
 ## 실행
 
 기존 FastAPI 서버 외에 별도 worker는 필요 없다. Vite 개발 서버를 쓸 때는 REST는
@@ -87,10 +121,14 @@ client secret이 아니라 `/audio/transcriptions`, `/chat/completions`, `/audio
 python be/evaluate_voice_metrics.py --mode benchmark --architecture custom_cascade
 python be/evaluate_voice_metrics.py --mode compare
 python be/evaluate_voice_metrics.py --mode analyze-logs --architecture custom_cascade
+python be/evaluate_voice_metrics.py --mode noise-suppression `
+  --corpus-manifest be/data/noise_corpus/manifest.jsonl
 ```
 
 합성 benchmark는 평가 배선 검사용이다. 실제 비교는 같은 음성 corpus를 두 구현에
 재생하고 저장 로그의 STT latency, TTFT, TTFA, E2E, barge-in, tool latency를 본다.
+Noise suppression benchmark의 corpus schema와 해석 기준은
+`be/data/noise_corpus/README.md`에 정리했다.
 
 ## 의도적인 경계
 

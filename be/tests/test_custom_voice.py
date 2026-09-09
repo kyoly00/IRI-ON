@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
+import inspect
 from pathlib import Path
 import json
+import os
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import wave
 
 import httpx
 import numpy as np
@@ -16,13 +20,33 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# 일부 Windows/Anaconda 조합의 Proactor socketpair 오류를 피해 순수 async 단위 테스트를 안정화한다.
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# IsolatedAsyncioTestCase가 테스트마다 loop를 만들 때 발생하는 일부 Windows/Anaconda의
+# 간헐적 socketpair 오류를 피하고, 전체 async suite가 소유하는 loop 하나만 사용한다.
+_TEST_LOOP = asyncio.new_event_loop()
+atexit.register(_TEST_LOOP.close)
+
+
+class SharedLoopAsyncTestCase(unittest.TestCase):
+    """Coroutine test method를 모듈 공용 event loop에서 실행한다."""
+
+    def _callTestMethod(self, method) -> None:
+        if inspect.iscoroutinefunction(method):
+            _TEST_LOOP.run_until_complete(method())
+            return
+        super()._callTestMethod(method)
 
 from custom_voice.audio import AdaptiveEnergyEndpointDetector, ProsodyExtractor
 from custom_voice.config import CustomVoiceSettings
 from custom_voice.privacy import PIIRedactor
+from custom_voice.noise_evaluation import run_noise_suppression_benchmark, text_metrics
+from custom_voice.noise_suppression import (
+    AntiAliasResampler,
+    AudioFrame,
+    DeepFilterNetSuppressor,
+    NoiseSuppressionStats,
+    PassthroughNoiseSuppressor,
+    RNNoiseSuppressor,
+)
 from custom_voice.providers import OpenAIHttpProviders, ProviderError
 from custom_voice.runtime import SentenceChunker
 from custom_voice.runtime import CustomVoiceRuntime
@@ -89,6 +113,127 @@ class AudioPipelineTests(unittest.TestCase):
         self.assertLessEqual(metadata.urgency, 1)
 
 
+class NoiseSuppressionTests(unittest.TestCase):
+    """Optional NS contract, native framing, resampling order and cost metrics."""
+
+    @staticmethod
+    def _frame(samples: np.ndarray, rate: int = 48_000) -> AudioFrame:
+        return AudioFrame(samples.astype("<i2").tobytes(), rate, 7, 960, 12.5)
+
+    def test_passthrough_preserves_pcm_and_metadata(self) -> None:
+        frame = self._frame(np.arange(960, dtype=np.int16))
+        suppressor = PassthroughNoiseSuppressor("browser")
+
+        result = _TEST_LOOP.run_until_complete(suppressor.process(frame))
+
+        self.assertIs(result, frame)
+        self.assertEqual(suppressor.stats.frames, 1)
+        self.assertEqual(suppressor.stats.summary()["mode"], "browser")
+
+    def test_rnnoise_uses_480_sample_native_blocks(self) -> None:
+        block_sizes: list[int] = []
+
+        def halve(block: np.ndarray) -> np.ndarray:
+            block_sizes.append(block.size)
+            return block * 0.5
+
+        source = np.full(960, 2000, dtype=np.int16)
+        suppressor = RNNoiseSuppressor(native_processor=halve)
+        result = suppressor._process_sync(self._frame(source))
+
+        self.assertEqual(block_sizes, [480, 480])
+        self.assertTrue(np.all(np.frombuffer(result.pcm, dtype="<i2") == 1000))
+        self.assertEqual(result.sequence, 7)
+        self.assertGreaterEqual(suppressor.stats.summary()["realtime_factor"], 0)
+
+    def test_deepfilternet_adapter_is_injectable_without_optional_package(self) -> None:
+        source = np.full(960, 1200, dtype=np.int16)
+        suppressor = DeepFilterNetSuppressor(processor=lambda samples: samples - 200)
+
+        result = suppressor._process_sync(self._frame(source))
+
+        self.assertTrue(np.all(np.frombuffer(result.pcm, dtype="<i2") == 1000))
+        self.assertEqual(result.sample_rate, 48_000)
+
+    def test_fir_resampler_attenuates_alias_band(self) -> None:
+        rate = 48_000
+        frame_axis = np.arange(960) / rate
+
+        def resample_frequency(frequency: float) -> np.ndarray:
+            resampler = AntiAliasResampler(48_000, 16_000)
+            chunks = []
+            for sequence in range(8):
+                phase_axis = frame_axis + sequence * 960 / rate
+                source = (np.sin(2 * np.pi * frequency * phase_axis) * 10_000).astype("<i2")
+                chunks.append(np.frombuffer(resampler.process(self._frame(source)).pcm, dtype="<i2"))
+            return np.concatenate(chunks)[320:]
+
+        passband_rms = float(np.sqrt(np.mean(resample_frequency(1_000).astype(np.float64) ** 2)))
+        stopband_rms = float(np.sqrt(np.mean(resample_frequency(12_000).astype(np.float64) ** 2)))
+        self.assertLess(stopband_rms, passband_rms * 0.08)
+
+    def test_noise_mode_controls_browser_dsp_without_double_suppression(self) -> None:
+        with patch.dict(os.environ, {"CUSTOM_VOICE_NOISE_SUPPRESSION": "rnnoise"}):
+            settings = CustomVoiceSettings.from_env()
+        self.assertEqual(settings.transport_sample_rate, 48_000)
+        self.assertTrue(settings.browser_audio_constraints["echo_cancellation"])
+        self.assertFalse(settings.browser_audio_constraints["noise_suppression"])
+
+    def test_downstream_text_metrics_cover_entities_and_numbers(self) -> None:
+        metrics = text_metrics(
+            "삼성전자 주가 75000원",
+            "삼성전자 주가 7500원",
+            ["삼성전자"],
+            ["75000"],
+        )
+        self.assertEqual(metrics["entity_accuracy"], 1.0)
+        self.assertEqual(metrics["numeric_accuracy"], 0.0)
+        self.assertGreater(metrics["cer"], 0)
+
+
+class NoiseEvaluationTests(SharedLoopAsyncTestCase):
+    """Manifest에서 동일 PCM을 읽어 DSP/VAD 평가 결과까지 만드는 smoke test."""
+
+    async def test_partial_corpus_benchmark_runs_without_stt_or_optional_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rate = 48_000
+            speech = (np.sin(2 * np.pi * 220 * np.arange(rate // 2) / rate) * 3000).astype("<i2")
+            samples = np.concatenate((speech, np.zeros(rate // 2, dtype="<i2")))
+            for name in ("clean.wav", "noisy.wav"):
+                with wave.open(str(root / name), "wb") as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(rate)
+                    wav_file.writeframes(samples.tobytes())
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "id": "synthetic-1",
+                        "noise_type": "fan_air_conditioner",
+                        "clean_wav": "clean.wav",
+                        "noisy_wav": "noisy.wav",
+                        "reference_text": "테스트",
+                        "speech_segments_ms": [[0, 500]],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = await run_noise_suppression_benchmark(
+                manifest,
+                ["no_noise_suppression"],
+                run_stt=False,
+                allow_partial_corpus=True,
+            )
+
+        summary = result["configs"]["no_noise_suppression"]["summary"]
+        self.assertIsNotNone(summary["vad_false_positive_rate"])
+        self.assertIsNotNone(summary["realtime_factor"])
+
+
 class SentenceChunkerTests(unittest.TestCase):
     """LLM delta가 문장 경계에서만 TTS queue로 넘어가는지 확인한다."""
 
@@ -99,7 +244,7 @@ class SentenceChunkerTests(unittest.TestCase):
         self.assertIsNone(chunker.flush())
 
 
-class ProviderTests(unittest.IsolatedAsyncioTestCase):
+class ProviderTests(SharedLoopAsyncTestCase):
     """TTS HTTP 계약과 비정상 응답 차단을 실제 socket 없이 검사한다."""
 
     async def test_tts_request_returns_valid_pcm(self) -> None:
@@ -152,6 +297,7 @@ class TraceStoreTests(unittest.TestCase):
     def test_saves_evaluator_compatible_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = CustomTraceStore("session-1", 1, 2, "prompt", Path(temp_dir))
+            store.runtime_metrics["noise_suppression"] = {"mode": "rnnoise", "realtime_factor": 0.2}
             turn = store.start_turn("speech-1", 10.0)
             turn.user_speech_end_ts = 11.0
             turn.stt_completed_ts = 11.2
@@ -164,6 +310,7 @@ class TraceStoreTests(unittest.TestCase):
             payload = json.loads(store.save().read_text(encoding="utf-8"))
             self.assertEqual(payload["architecture"], "custom_cascade")
             self.assertEqual(payload["metrics_summary"]["total_turns"], 1)
+            self.assertEqual(payload["runtime_metrics"]["noise_suppression"]["mode"], "rnnoise")
             self.assertEqual(payload["metrics_summary"]["latency_metrics_ms"]["ttfa (time_to_first_audio)"]["p50"], 500.0)
 
 
@@ -212,7 +359,25 @@ class _FailingTTSProviders(_FakeProviders):
         raise ProviderError("TTS failed (400): invalid voice")
 
 
-class RuntimePipelineTests(unittest.IsolatedAsyncioTestCase):
+class _RecordingNoiseSuppressor:
+    """Runtime의 NS-before-resampling 순서를 관찰하는 adapter 대역."""
+
+    mode = "rnnoise"
+
+    def __init__(self) -> None:
+        self.rates: list[int] = []
+        self.stats = NoiseSuppressionStats(mode=self.mode)
+
+    async def process(self, frame: AudioFrame) -> AudioFrame:
+        self.rates.append(frame.sample_rate)
+        self.stats.record(frame, 0.1, 0.05)
+        return frame
+
+    async def close(self) -> None:
+        return None
+
+
+class RuntimePipelineTests(SharedLoopAsyncTestCase):
     """text→streaming LLM→TTS→trace fan-out을 외부 API 없이 통합 검사한다."""
 
     async def test_text_turn_produces_text_audio_and_metrics(self) -> None:
@@ -236,6 +401,29 @@ class RuntimePipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("assistant_done", event_types)
         self.assertEqual(len(runtime.trace.turns), 1)
         self.assertEqual(runtime.trace.turns[0].output_tokens, 8)
+
+    async def test_runtime_applies_deep_ns_at_48k_before_16k_vad(self) -> None:
+        websocket = _FakeWebSocket()
+        suppressor = _RecordingNoiseSuppressor()
+        settings = CustomVoiceSettings(noise_suppression="rnnoise")
+        with (
+            patch("custom_voice.runtime.OpenAIHttpProviders", return_value=_FakeProviders()),
+            patch("custom_voice.runtime.create_noise_suppressor", return_value=suppressor),
+        ):
+            runtime = CustomVoiceRuntime(
+                websocket=websocket,
+                session_id="ns-order-test",
+                user_id=1,
+                recipe_id=2,
+                system_prompt="테스트 prompt",
+                settings=settings,
+            )
+
+        # 48 kHz 20 ms(960 samples)가 NS를 먼저 거쳐 16 kHz 20 ms(320 samples)가 된다.
+        await runtime._handle_audio(np.zeros(960, dtype="<i2").tobytes())
+
+        self.assertEqual(suppressor.rates, [48_000])
+        self.assertEqual(len(runtime.detector._pending), 320 * 2)
 
     async def test_low_energy_utterance_skips_stt_and_returns_to_listening(self) -> None:
         websocket = _FakeWebSocket()
