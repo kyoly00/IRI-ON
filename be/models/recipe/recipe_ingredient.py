@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey
+from sqlalchemy import Column, ForeignKey, String
 from sqlalchemy.dialects.mysql import BIGINT, DECIMAL
 from sqlalchemy.orm import relationship
 from db.base import Base
@@ -10,6 +10,7 @@ class RecipeIngredient(Base):
     ingredient_id = Column(BIGINT, ForeignKey("ingredient.ingredient_id"), primary_key=True)
 
     quantity = Column(DECIMAL(6, 2))
+    unit = Column(String(20), nullable=True)
 
     ingredient = relationship("Ingredient", backref="recipe_ingredients")
     recipe = relationship("Recipe", backref="recipe_ingredients")

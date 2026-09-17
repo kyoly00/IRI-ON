@@ -14,6 +14,13 @@ export default function Menu() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeName, setYoutubeName] = useState("");
+  const [minDurationSeconds, setMinDurationSeconds] = useState("");
+  const [minSteps, setMinSteps] = useState("");
+  const [maxSteps, setMaxSteps] = useState("");
+  const [youtubeImporting, setYoutubeImporting] = useState(false);
+  const [youtubeMessage, setYoutubeMessage] = useState("");
   const navigate = useNavigate();
 
   // ✅ 메뉴 불러오기
@@ -73,9 +80,47 @@ export default function Menu() {
   // ✅ 요리 시작 버튼
   const handleStartCooking = () => {
     if (selectedId) {
-      navigate(`/CookingExplain/${selectedId}`);
+      navigate(`/recipes/${selectedId}/check`);
     } else {
       alert("메뉴를 선택해주세요!");
+    }
+  };
+
+  // 서버가 URL·중복·자막·LLM 단계 검증을 모두 통과시킨 레시피만 요리 화면으로 연다.
+  const handleYouTubeImport = async (event) => {
+    event.preventDefault();
+    const videoUrl = youtubeUrl.trim();
+    if (!videoUrl) {
+      setYoutubeMessage("YouTube 링크를 먼저 입력해 주세요.");
+      return;
+    }
+    const optionalNumber = (value) => (value === "" ? undefined : Number(value));
+    setYoutubeImporting(true);
+    setYoutubeMessage("");
+    try {
+      const response = await fetch(api("/recipes/import-youtube"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          video_url: videoUrl,
+          name: youtubeName.trim() || undefined,
+          min_duration_seconds: optionalNumber(minDurationSeconds),
+          min_steps: optionalNumber(minSteps),
+          max_steps: optionalNumber(maxSteps),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "영상 레시피를 만들지 못했어요.");
+      const recipeId = data.recipe?.recipe_id;
+      if (!recipeId) throw new Error("생성된 레시피 정보를 받지 못했어요.");
+      setYoutubeMessage(data.message || "레시피를 준비했어요.");
+      // 중복이면 새 row를 만들지 않고, 이미 검증된 기존 레시피로 바로 안내한다.
+      navigate(`/CookingExplain/${recipeId}`);
+    } catch (reason) {
+      setYoutubeMessage(reason.message || "영상 레시피를 만들지 못했어요.");
+    } finally {
+      setYoutubeImporting(false);
     }
   };
 
@@ -109,6 +154,38 @@ export default function Menu() {
           onChange={handleSearchChange}
         />
       </div>
+
+      <section className="youtube-import-card" aria-label="YouTube 영상 레시피 등록">
+        <h3>YouTube 링크로 바로 요리하기</h3>
+        <p>자막과 조리 단계를 검증한 뒤 레시피를 만들고 음성 보조 화면으로 이동해요.</p>
+        <form onSubmit={handleYouTubeImport}>
+          <input
+            type="url"
+            placeholder="YouTube 링크를 붙여 넣어 주세요"
+            value={youtubeUrl}
+            onChange={(event) => setYoutubeUrl(event.target.value)}
+            disabled={youtubeImporting}
+            required
+          />
+          <input
+            type="text"
+            placeholder="요리 이름 (비우면 영상 자막에서 만들어요)"
+            value={youtubeName}
+            onChange={(event) => setYoutubeName(event.target.value)}
+            disabled={youtubeImporting}
+          />
+          <details>
+            <summary>짧은 영상·단계 수 설정</summary>
+            <div className="youtube-policy-inputs">
+              <label>최소 영상 길이(초)<input type="number" min="0" value={minDurationSeconds} onChange={(event) => setMinDurationSeconds(event.target.value)} placeholder="서버 기본값: 0" /></label>
+              <label>최소 단계 수<input type="number" min="1" max="60" value={minSteps} onChange={(event) => setMinSteps(event.target.value)} placeholder="서버 기본값: 1" /></label>
+              <label>최대 단계 수<input type="number" min="1" max="60" value={maxSteps} onChange={(event) => setMaxSteps(event.target.value)} placeholder="서버 기본값: 24" /></label>
+            </div>
+          </details>
+          <button type="submit" disabled={youtubeImporting}>{youtubeImporting ? "자막·단계 검증 중…" : "영상으로 레시피 만들기"}</button>
+        </form>
+        {youtubeMessage && <p className="youtube-import-message">{youtubeMessage}</p>}
+      </section>
 
       {/* 카테고리 */}
       <div className="category-bar">

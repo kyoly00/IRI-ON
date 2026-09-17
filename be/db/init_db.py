@@ -29,6 +29,11 @@ def _add_missing_video_columns():
                     f"ALTER TABLE recipe_step ADD COLUMN {name} {definition}"
                 )
 
+    if "recipe_ingredient" in tables:
+        columns = {column["name"] for column in inspector.get_columns("recipe_ingredient")}
+        if "unit" not in columns:
+            statements.append("ALTER TABLE recipe_ingredient ADD COLUMN unit VARCHAR(20) NULL")
+
     if statements:
         with engine.begin() as connection:
             for statement in statements:

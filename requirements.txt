@@ -1,6 +1,7 @@
 audioread==3.0.1
 dotenv==0.9.9
 fastapi==0.116.1
+python-multipart==0.0.20
 faster-whisper==1.1.1
 google-genai==1.30.0
 huggingface-hub==0.34.4

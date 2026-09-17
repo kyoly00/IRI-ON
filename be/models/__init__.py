@@ -19,4 +19,5 @@ __all__ = [
     "UserIngredient",
     "UserSpeciality",
     "UserTool"
+    ,"Household", "HouseholdMember", "FridgeItem", "PurchaseRequest", "PurchaseRequestItem"
 ]

@@ -3,6 +3,7 @@ from .food_category import FoodCategory
 from .ingredient import Ingredient
 from .notification import Notification
 from .tool import Tool
+from .household import Household, HouseholdMember, FridgeItem, PurchaseRequest, PurchaseRequestItem
 
 __all__ = [
     "CookingRecord",
@@ -10,4 +11,5 @@ __all__ = [
     "Ingredient",
     "Notification",
     "Tool"
+    ,"Household", "HouseholdMember", "FridgeItem", "PurchaseRequest", "PurchaseRequestItem"
 ]

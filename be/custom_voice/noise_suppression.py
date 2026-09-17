@@ -1,8 +1,8 @@
-"""Optional deep-learning noise suppression and anti-alias resampling.
+"""선택형 딥러닝 노이즈 억제와 안티앨리어싱 리샘플링을 제공한다.
 
-The runtime only depends on :class:`NoiseSuppressor`. Native RNNoise and
-DeepFilterNet imports are lazy, so the default browser mode keeps the existing
-installation and startup path unchanged.
+런타임은 :class:`NoiseSuppressor` 추상 계약에만 의존한다. RNNoise 네이티브
+라이브러리와 DeepFilterNet 패키지는 실제로 해당 모드를 선택할 때만 지연
+로딩하므로, 기본 browser 모드의 설치 및 시작 경로에는 영향을 주지 않는다.
 """
 
 from __future__ import annotations
@@ -19,16 +19,16 @@ import numpy as np
 
 
 class NoiseSuppressionError(RuntimeError):
-    """Base error raised at the optional native noise-suppression boundary."""
+    """선택형 네이티브 노이즈 억제 경계에서 발생하는 공통 오류다."""
 
 
 class NoiseSuppressorUnavailable(NoiseSuppressionError):
-    """Raised when a selected native model or library is not installed."""
+    """선택한 네이티브 모델 또는 라이브러리를 사용할 수 없을 때 발생한다."""
 
 
 @dataclass(frozen=True)
 class AudioFrame:
-    """One mono PCM16 transport frame with correlation metadata."""
+    """상관관계 추적 메타데이터를 포함한 모노 PCM16 전송 프레임 하나다."""
 
     pcm: bytes
     sample_rate: int
@@ -38,16 +38,20 @@ class AudioFrame:
 
     @property
     def samples(self) -> int:
+        """PCM16 바이트 길이를 샘플 개수로 변환한다."""
+
         return len(self.pcm) // 2
 
     @property
     def duration_ms(self) -> float:
+        """현재 프레임의 재생 시간을 밀리초로 반환한다."""
+
         return self.samples / self.sample_rate * 1000.0 if self.sample_rate else 0.0
 
 
 @dataclass
 class NoiseSuppressionStats:
-    """Runtime cost accumulated for trace/evaluator comparison."""
+    """trace 및 evaluator 비교를 위해 세션 동안 누적하는 실행 비용이다."""
 
     mode: str
     frames: int = 0
@@ -58,6 +62,8 @@ class NoiseSuppressionStats:
     failures: int = 0
 
     def record(self, frame: AudioFrame, wall_ms: float, cpu_ms: float) -> None:
+        """프레임 하나의 음성 길이, 처리 지연시간과 CPU 시간을 누적한다."""
+
         self.frames += 1
         self.audio_ms += frame.duration_ms
         self.processing_ms += wall_ms
@@ -65,6 +71,8 @@ class NoiseSuppressionStats:
         self.max_frame_latency_ms = max(self.max_frame_latency_ms, wall_ms)
 
     def summary(self) -> dict[str, float | int | str]:
+        """누적값을 평균 지연시간, RTF, 처리 중 CPU 사용률로 요약한다."""
+
         mean_ms = self.processing_ms / self.frames if self.frames else 0.0
         rtf = self.processing_ms / self.audio_ms if self.audio_ms else 0.0
         cpu_usage = self.cpu_ms / self.processing_ms * 100.0 if self.processing_ms else 0.0
@@ -82,43 +90,53 @@ class NoiseSuppressionStats:
 
 @runtime_checkable
 class NoiseSuppressor(Protocol):
-    """Backend-independent asynchronous noise-suppression contract."""
+    """구현 backend와 무관하게 런타임이 사용하는 비동기 노이즈 억제 계약이다."""
 
     mode: str
     stats: NoiseSuppressionStats
 
     async def process(self, audio_frame: AudioFrame) -> AudioFrame:
-        """Return a frame with the same sample-rate/time contract."""
+        """동일한 sample-rate 및 시간축 계약을 유지한 처리 프레임을 반환한다."""
 
     async def close(self) -> None:
-        """Release native model state owned by one voice session."""
+        """음성 세션 하나가 소유한 네이티브 모델 상태를 해제한다."""
 
 
 class PassthroughNoiseSuppressor:
-    """No-op implementation used by ``none`` and browser NS modes."""
+    """``none``과 browser NS 모드에서 사용하는 무처리 구현이다."""
 
     def __init__(self, mode: str = "browser") -> None:
+        """선택된 모드 이름을 보존하고 통계 누적기를 만든다."""
+
         self.mode = mode
         self.stats = NoiseSuppressionStats(mode=mode)
 
     async def process(self, audio_frame: AudioFrame) -> AudioFrame:
+        """프레임을 변경하지 않고 무처리 비용만 기록해 반환한다."""
+
         started = time.perf_counter()
         self.stats.record(audio_frame, (time.perf_counter() - started) * 1000.0, 0.0)
         return audio_frame
 
     async def close(self) -> None:
+        """해제할 외부 자원이 없으므로 아무 작업도 하지 않는다."""
+
         return None
 
 
 class _MeasuredSuppressor:
-    """Runs CPU-bound native inference off the event loop and records its cost."""
+    """CPU 중심 네이티브 추론을 event loop 밖에서 실행하고 비용을 기록한다."""
 
     mode = "unknown"
 
     def __init__(self) -> None:
+        """구현 클래스의 mode에 대응하는 통계 누적기를 만든다."""
+
         self.stats = NoiseSuppressionStats(mode=self.mode)
 
     async def process(self, audio_frame: AudioFrame) -> AudioFrame:
+        """동기 추론을 작업 스레드에서 실행하고 wall/CPU 시간을 측정한다."""
+
         wall_started = time.perf_counter()
         cpu_started = time.process_time()
         try:
@@ -134,14 +152,18 @@ class _MeasuredSuppressor:
         return processed
 
     def _process_sync(self, audio_frame: AudioFrame) -> AudioFrame:
+        """구현 클래스가 제공해야 하는 동기 프레임 처리 지점이다."""
+
         raise NotImplementedError
 
     async def close(self) -> None:
+        """기본 구현에는 해제할 자원이 없으며 구현 클래스가 필요 시 재정의한다."""
+
         return None
 
 
 class RNNoiseSuppressor(_MeasuredSuppressor):
-    """RNNoise adapter for its native 48 kHz, 480-sample processing frames."""
+    """RNNoise의 네이티브 48 kHz, 480샘플 처리 규격을 연결하는 adapter다."""
 
     mode = "rnnoise"
     native_sample_rate = 48_000
@@ -152,6 +174,8 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
         library_path: str | None = None,
         native_processor: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> None:
+        """주입된 processor를 쓰거나 지정된 RNNoise 라이브러리를 로딩한다."""
+
         super().__init__()
         self._native_processor = native_processor
         self._library: ctypes.CDLL | None = None
@@ -160,6 +184,8 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
             self._load_library(library_path)
 
     def _load_library(self, library_path: str | None) -> None:
+        """RNNoise 공유 라이브러리의 C ABI를 설정하고 세션 상태를 생성한다."""
+
         resolved = library_path or ctypes.util.find_library("rnnoise")
         if not resolved:
             raise NoiseSuppressorUnavailable(
@@ -186,6 +212,8 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
         self._state = state
 
     def _process_native_block(self, samples: np.ndarray) -> np.ndarray:
+        """정확히 480개 샘플을 주입 processor 또는 RNNoise C 함수로 처리한다."""
+
         if self._native_processor is not None:
             result = np.asarray(self._native_processor(samples.copy()), dtype=np.float32)
             if result.shape != samples.shape:
@@ -198,6 +226,8 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
         return np.ctypeslib.as_array(buffer).copy()
 
     def _process_sync(self, audio_frame: AudioFrame) -> AudioFrame:
+        """48 kHz 전송 프레임을 480샘플 블록으로 나눠 순차 처리한다."""
+
         if audio_frame.sample_rate != self.native_sample_rate:
             raise NoiseSuppressionError("RNNoise input must be 48 kHz PCM16 before downsampling")
         samples = np.frombuffer(audio_frame.pcm, dtype="<i2").astype(np.float32)
@@ -212,6 +242,8 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
         return AudioFrame(pcm, audio_frame.sample_rate, audio_frame.sequence, audio_frame.sample_index, audio_frame.timestamp)
 
     async def close(self) -> None:
+        """RNNoise 세션 상태를 파괴하고 공유 라이브러리 참조를 해제한다."""
+
         if self._library is not None and self._state is not None:
             self._library.rnnoise_destroy(self._state)
         self._state = None
@@ -219,10 +251,10 @@ class RNNoiseSuppressor(_MeasuredSuppressor):
 
 
 class DeepFilterNetSuppressor(_MeasuredSuppressor):
-    """Lazy DeepFilterNet adapter operating on full-band 48 kHz PCM frames.
+    """전대역 48 kHz PCM 프레임을 처리하는 지연 로딩 DeepFilterNet adapter다.
 
-    ``processor`` is an injection seam for tests or an optimized streaming
-    binding. Without it, the official ``df.enhance`` Python package is loaded.
+    ``processor``는 테스트 또는 최적화된 streaming binding을 주입하는 경계다.
+    이를 전달하지 않으면 공식 ``df.enhance`` Python 패키지를 로딩한다.
     """
 
     mode = "deepfilternet"
@@ -233,6 +265,8 @@ class DeepFilterNetSuppressor(_MeasuredSuppressor):
         model_path: str | None = None,
         processor: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> None:
+        """모델 경로와 선택적 processor를 보관하며 모델 로딩은 미룬다."""
+
         super().__init__()
         self._model_path = model_path
         self._processor = processor
@@ -240,6 +274,8 @@ class DeepFilterNetSuppressor(_MeasuredSuppressor):
         self._df_state = None
 
     def _load_model(self) -> None:
+        """첫 처리 요청에서 DeepFilterNet 모델과 상태를 한 번만 로딩한다."""
+
         if self._processor is not None or self._model is not None:
             return
         try:
@@ -260,6 +296,8 @@ class DeepFilterNetSuppressor(_MeasuredSuppressor):
         self._df_state = df_state
 
         def process_with_official_package(samples: np.ndarray) -> np.ndarray:
+            """PCM16 범위 샘플을 tensor로 정규화해 공식 enhance 함수를 호출한다."""
+
             audio = torch.from_numpy((samples / 32768.0).astype(np.float32)).unsqueeze(0)
             result = enhance(model, df_state, audio, pad=True).squeeze(0).numpy()
             return np.asarray(result * 32768.0, dtype=np.float32)
@@ -267,6 +305,8 @@ class DeepFilterNetSuppressor(_MeasuredSuppressor):
         self._processor = process_with_official_package
 
     def _process_sync(self, audio_frame: AudioFrame) -> AudioFrame:
+        """48 kHz 프레임을 DeepFilterNet으로 처리하고 PCM16 범위로 복원한다."""
+
         if audio_frame.sample_rate != self.native_sample_rate:
             raise NoiseSuppressionError("DeepFilterNet input must be 48 kHz PCM16 before downsampling")
         self._load_model()
@@ -280,9 +320,11 @@ class DeepFilterNetSuppressor(_MeasuredSuppressor):
 
 
 class AntiAliasResampler:
-    """Stateful windowed-sinc FIR decimator used after deep NS (48→16 kHz)."""
+    """Deep NS 이후 48→16 kHz 변환에 쓰는 상태 유지형 windowed-sinc FIR decimator다."""
 
     def __init__(self, source_rate: int, target_rate: int, taps: int = 63) -> None:
+        """정수 downsampling 배율을 검증하고 저역통과 FIR kernel을 생성한다."""
+
         if source_rate == target_rate:
             self.factor = 1
         elif source_rate % target_rate == 0:
@@ -304,6 +346,8 @@ class AntiAliasResampler:
             self._kernel = (kernel / np.sum(kernel)).astype(np.float32)
 
     def process(self, audio_frame: AudioFrame) -> AudioFrame:
+        """이전 프레임 이력을 이어 필터링한 뒤 목표 sample rate로 decimation한다."""
+
         if audio_frame.sample_rate != self.source_rate:
             raise ValueError(f"Expected {self.source_rate} Hz input, got {audio_frame.sample_rate} Hz")
         if self.factor == 1:
@@ -329,7 +373,7 @@ def create_noise_suppressor(
     rnnoise_library: str | None = None,
     deepfilternet_model: str | None = None,
 ) -> NoiseSuppressor:
-    """Build the selected implementation while keeping optional imports lazy."""
+    """선택 모드의 구현을 만들되 선택형 의존성은 계속 지연 로딩한다."""
 
     normalized = mode.strip().lower()
     if normalized in {"none", "browser"}:

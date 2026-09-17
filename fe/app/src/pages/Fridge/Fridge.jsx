@@ -1,186 +1,52 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../../lib/api";
 import "./Fridge.css";
-import { useNavigate } from "react-router-dom";
-import { FaSearch, FaClock } from "react-icons/fa";
-import { api } from '../../lib/api';
 
-const API_BASE = api;
+const emptyItem = { name: "", ingredient_id: "", quantity: "", unit: "g" };
 
 export default function Fridge() {
-  const [ingredients, setIngredients] = useState([]);
-  const [selected, setSelected] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const userId = localStorage.getItem("user_id");
+  const [household, setHousehold] = useState(null);
+  const [items, setItems] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [newHousehold, setNewHousehold] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [item, setItem] = useState(emptyItem);
+  const [visionItems, setVisionItems] = useState([]);
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [errMsg, setErrMsg] = useState("");
 
-  const navigate = useNavigate();
-
-  // 날짜 포맷: 08.26 화
-  const dateLabel = useMemo(() => {
-    const d = new Date();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-    const wd = weekdays[d.getDay()];
-    return `${mm}.${dd} ${wd}`;
-  }, []);
-
-  // 재료 목록 불러오기
-  useEffect(() => {
-    const ac = new AbortController();
-
-    (async () => {
-      try {
-        setLoading(true);
-        setErrMsg("");
-
-        const userId = localStorage.getItem("user_id");
-        if (!userId) {
-          setErrMsg("로그인이 필요합니다. 다시 로그인해주세요.");
-          setLoading(false);
-          return;
-        }
-
-        const res = await fetch(`${API_BASE}/ingredients?user_id=${userId}`, {
-          signal: ac.signal,
-        });
-
-        if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
-
-        const data = await res.json();
-        setIngredients(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          console.error("❌ 재료 불러오기 실패:", err);
-          setErrMsg("재료 목록을 불러오지 못했습니다.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-
-    return () => ac.abort();
-  }, []);
-
-  // 선택 토글
-  const toggleSelect = (id) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  // 선택한 재료 DB 저장 + 다음 화면 이동
-  const goToComplete = async () => {
-    const userId = localStorage.getItem("user_id");
-    if (!userId) {
-      alert("로그인이 필요합니다.");
-      return;
-    }
-    if (selected.length === 0) {
-      alert("재료를 하나 이상 선택하세요.");
-      return;
-    }
-
+  const requestUrl = (path, init) => fetch(api(path), init).then(async (r) => {
+    const data = await r.json(); if (!r.ok) throw new Error(data.detail || "요청에 실패했습니다."); return data;
+  });
+  const load = async () => {
+    if (!userId) { setMessage("로그인 후 사용할 수 있습니다."); setLoading(false); return; }
     try {
-      // ✅ 선택한 재료 payload
-      const payload = selected.map((id) => ({ ingredient_id: id }));
-
-      const res = await fetch(`${API_BASE}/users/ingredients?user_id=${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error("재료 저장 실패");
-      console.log("✅ 재료 저장 성공");
-
-      navigate("/fridgeComplete", { state: { selected } });
-    } catch (err) {
-      console.error("❌ 재료 저장 중 오류:", err);
-      alert("재료 저장에 실패했습니다.");
-    }
+      const [profile, ingredients] = await Promise.all([requestUrl(`/households/me?user_id=${userId}`), requestUrl("/ingredients")]);
+      setHousehold(profile.household); setCatalog(ingredients);
+      if (profile.household) {
+        const [stock, list] = await Promise.all([requestUrl(`/households/${profile.household.household_id}/fridge-items?user_id=${userId}`), requestUrl(`/households/${profile.household.household_id}/purchase-requests?user_id=${userId}`)]);
+        setItems(stock); setRequests(list);
+      }
+    } catch (e) { setMessage(e.message); } finally { setLoading(false); }
   };
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 검색 필터 (공백/대소문자 무시)
-  const filteredIngredients = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return ingredients;
-    return ingredients.filter((item) =>
-      String(item.name).toLowerCase().includes(q)
-    );
-  }, [ingredients, searchTerm]);
+  const createHousehold = async (e) => { e.preventDefault(); try { await requestUrl(`/households?user_id=${userId}`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:newHousehold}) }); await load(); } catch(e2) { setMessage(e2.message); } };
+  const joinHousehold = async (e) => { e.preventDefault(); try { await requestUrl(`/households/join?user_id=${userId}`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({invite_code:inviteCode}) }); await load(); } catch(e2) { setMessage(e2.message); } };
+  const addItem = async (e) => { e.preventDefault(); try { const payload = { quantity:Number(item.quantity), unit:item.unit }; if (item.ingredient_id) payload.ingredient_id=Number(item.ingredient_id); else payload.name=item.name; await requestUrl(`/households/${household.household_id}/fridge-items?user_id=${userId}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}); setItem(emptyItem); await load(); } catch(e2) { setMessage(e2.message); } };
+  const parseImage = async (e) => { const file=e.target.files?.[0]; if(!file) return; const form=new FormData(); form.append("image", file); try { const result=await requestUrl(`/households/${household.household_id}/vision/parse?user_id=${userId}`,{method:"POST",body:form}); setVisionItems(result.items.map((x)=>({...x, quantity:x.quantity || 1, unit:x.unit || "piece"}))); } catch(e2){setMessage(e2.message);} finally {e.target.value="";} };
+  const confirmVision = async () => { try { await requestUrl(`/households/${household.household_id}/fridge-items/confirm?user_id=${userId}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(visionItems.map(({name,quantity,unit})=>({name,quantity:Number(quantity),unit})))}); setVisionItems([]); await load(); } catch(e){setMessage(e.message);} };
+  const review = async (id,status) => { try { await requestUrl(`/households/${household.household_id}/purchase-requests/${id}?user_id=${userId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})}); await load(); }catch(e){setMessage(e.message);} };
+  const selectedName = useMemo(() => catalog.find((x)=>String(x.ingredient_id)===String(item.ingredient_id))?.name, [catalog,item.ingredient_id]);
 
-  return (
-    <div className="fridge-page">
-      {/* ===== 헤더 ===== */}
-      <header className="fridge-header">
-        <h1 className="fridge-title">냉장고 만들기</h1>
-        <p className="fridge-desc">
-          냉장고 속 재료를 선택하고,
-          <br />
-          메뉴를 추천받으세요!
-        </p>
-
-        {/* 날짜 */}
-        <div className="date-chip">
-          <FaClock aria-hidden style={{ marginRight: 6 }} />
-          {dateLabel}
-        </div>
-
-        {/* 검색창 */}
-        <div className="search-box">
-          <FaSearch className="search-icon" aria-hidden />
-          <input
-            type="text"
-            placeholder="재료를 검색하세요."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="재료 검색"
-          />
-        </div>
-      </header>
-
-      {/* ===== 본문 ===== */}
-      <main className="fridge-content">
-        {loading ? (
-          <div className="empty-state">불러오는 중...</div>
-        ) : errMsg ? (
-          <div className="empty-state error">{errMsg}</div>
-        ) : filteredIngredients.length === 0 ? (
-          <div className="empty-state">표시할 재료가 없어요.</div>
-        ) : (
-          <div className="ingredient-grid">
-            {filteredIngredients.map((item) => {
-              const id = item.ingredient_id;
-              const isSelected = selected.includes(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`ingredient-card ${isSelected ? "selected" : ""}`}
-                  onClick={() => toggleSelect(id)}
-                  aria-pressed={isSelected}
-                >
-                  <span className="ingredient-name">{item.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </main>
-
-      {/* ===== 푸터 ===== */}
-      <footer className="fridge-footer">
-        <button
-          onClick={goToComplete}
-          disabled={selected.length === 0}
-          className="create-btn"
-          aria-disabled={selected.length === 0}
-          title={selected.length === 0 ? "재료를 하나 이상 선택하세요" : undefined}
-        >
-          생성하기{selected.length > 0 ? ` (${selected.length})` : ""}
-        </button>
-      </footer>
-    </div>
-  );
+  if (loading) return <main className="shared-fridge"><p>공유 냉장고를 불러오는 중…</p></main>;
+  if (!household) return <main className="shared-fridge setup"><h1>우리 집 냉장고</h1><p>부모는 가정을 만들고, 아이는 초대 코드로 참여해요.</p><form onSubmit={createHousehold}><h2>부모 계정</h2><input required value={newHousehold} onChange={(e)=>setNewHousehold(e.target.value)} placeholder="우리 집 이름"/><button>가정 만들기</button></form><form onSubmit={joinHousehold}><h2>아이 계정</h2><input required value={inviteCode} onChange={(e)=>setInviteCode(e.target.value)} placeholder="초대 코드"/><button>초대 코드로 참여</button></form>{message&&<p className="fridge-message">{message}</p>}</main>;
+  return <main className="shared-fridge"><header><h1>{household.name} 냉장고</h1><p>{household.role === "parent" ? `부모 계정 · 초대 코드 ${household.invite_code}` : "아이 계정 · 가족과 재료를 함께 관리해요"}</p></header>
+    <section className="stock-card"><h2>재료 추가</h2><form className="add-item" onSubmit={addItem}><select value={item.ingredient_id} onChange={(e)=>setItem({...item,ingredient_id:e.target.value,name:""})}><option value="">새 재료 직접 입력</option>{catalog.map((x)=><option value={x.ingredient_id} key={x.ingredient_id}>{x.name}</option>)}</select>{!item.ingredient_id&&<input required value={item.name} onChange={(e)=>setItem({...item,name:e.target.value})} placeholder="재료 이름"/>}<input required type="number" min="0.01" step="0.01" value={item.quantity} onChange={(e)=>setItem({...item,quantity:e.target.value})} placeholder="수량"/><select value={item.unit} onChange={(e)=>setItem({...item,unit:e.target.value})}>{["g","kg","ml","l","cup","tbsp","tsp","piece"].map((u)=><option key={u}>{u}</option>)}</select><button>추가</button></form><label className="upload">영수증 또는 장보기 스크린샷 인식<input type="file" accept="image/*" onChange={parseImage}/></label></section>
+    {visionItems.length>0&&<section className="stock-card"><h2>인식 결과 확인</h2>{visionItems.map((x,index)=><div className="vision-row" key={index}><input value={x.name} onChange={(e)=>setVisionItems(visionItems.map((v,i)=>i===index?{...v,name:e.target.value}:v))}/><input type="number" value={x.quantity} onChange={(e)=>setVisionItems(visionItems.map((v,i)=>i===index?{...v,quantity:e.target.value}:v))}/><input value={x.unit} onChange={(e)=>setVisionItems(visionItems.map((v,i)=>i===index?{...v,unit:e.target.value}:v))}/></div>)}<button onClick={confirmVision}>확인 후 냉장고에 추가</button></section>}
+    <section className="stock-card"><h2>보유 재료</h2>{items.length ? <div className="fridge-grid">{items.map((x)=><div key={x.fridge_item_id}><strong>{x.name}</strong><span>{x.quantity} {x.unit}</span></div>)}</div> : <p>아직 등록한 재료가 없어요.</p>}</section>
+    <section className="stock-card"><h2>{household.role === "parent" ? "구매 요청" : "내 구매 요청"}</h2>{requests.length ? requests.map((request)=><article className="request" key={request.purchase_request_id}><b>{request.recipe_name || "장보기"} · {request.status}</b><p>{request.requester_name} · {request.items.map((x)=>`${x.name} ${x.quantity}${x.unit}`).join(", ")}</p>{household.role==="parent"&&request.status==="pending"&&<><button onClick={()=>review(request.purchase_request_id,"approved")}>승인</button><button onClick={()=>review(request.purchase_request_id,"rejected")}>거절</button></>}{request.status==="approved"&&request.items.map((x)=><a key={x.ingredient_id} href={x.shopping_url} target="_blank" rel="noreferrer">{x.name} 구매 검색</a>)}</article>) : <p>구매 요청이 없습니다.</p>}</section>
+    <section className="placeholder-card"><h2>준비 중인 냉장고 기능</h2><p>유통기한 알림 · 조리 후 자동 재고 차감 · 소비 예측 · 냉장고 내부 Vision 인식</p></section>{message&&<p className="fridge-message">{message}</p>}</main>;
 }

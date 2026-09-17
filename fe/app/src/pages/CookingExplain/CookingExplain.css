@@ -26,6 +26,9 @@
 .yt-fallback, .timeline-notice { margin: 8px 4px 0; font-size: 12px; line-height: 1.4; color: #796f67; }
 .yt-fallback a { color: #ec7d2d; font-weight: 800; }
 .timeline-notice { padding: 9px 12px; border-radius: 10px; background: #fff3d9; color: #765a21; }
+.timeline-notice p { margin: 0 0 8px; }
+.timeline-notice button { border: 0; border-radius: 999px; padding: 7px 10px; background: #ed8b32; color: #fff; font-size: 12px; font-weight: 800; cursor: pointer; }
+.timeline-notice button:disabled { opacity: .6; cursor: wait; }
 .recipe-main-image { display: block; max-height: 300px; object-fit: cover; border-radius: 18px; margin-bottom: 14px; }
 
 .step-card { box-sizing: border-box; background: #fff; border: 2px solid #ffd4b3; border-radius: 18px; padding: 18px; box-shadow: 0 7px 24px rgba(235, 135, 78, .12); }

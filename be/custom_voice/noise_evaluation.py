@@ -1,7 +1,7 @@
-"""Manifest-driven downstream evaluation for optional noise suppression.
+"""manifest 기반으로 선택형 노이즈 억제의 downstream 성능을 평가한다.
 
-This benchmark evaluates the complete NS -> resampling -> VAD -> STT path. It
-does not treat perceptual cleanliness as a sufficient success criterion.
+이 benchmark는 NS -> 리샘플링 -> VAD -> STT 전체 경로를 평가한다. 단순히
+사람이 듣기에 깨끗해졌다는 이유만으로 노이즈 억제가 성공했다고 판단하지 않는다.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ EXPERIMENT_CONFIGS = {
 
 @dataclass(frozen=True)
 class CorpusItem:
-    """One aligned clean/noisy utterance and its downstream labels."""
+    """시간 정렬된 clean/noisy 발화 한 쌍과 downstream 정답 label을 담는다."""
 
     item_id: str
     noise_type: str
@@ -60,7 +60,7 @@ class CorpusItem:
 
 
 def load_manifest(path: Path, allow_partial_corpus: bool = False) -> list[CorpusItem]:
-    """Load JSONL corpus metadata and enforce the requested noise coverage."""
+    """JSONL corpus 메타데이터를 읽고 필수 소음 종류가 포함됐는지 검증한다."""
 
     items: list[CorpusItem] = []
     base = path.resolve().parent
@@ -73,6 +73,8 @@ def load_manifest(path: Path, allow_partial_corpus: bool = False) -> list[Corpus
             raise ValueError(f"Invalid JSON on manifest line {line_number}: {exc}") from exc
 
         def resolve(name: str) -> Path:
+            """manifest 기준 상대 경로를 실제 파일의 절대 경로로 해석한다."""
+
             value = Path(str(raw[name]))
             return value if value.is_absolute() else base / value
 
@@ -109,6 +111,8 @@ def load_manifest(path: Path, allow_partial_corpus: bool = False) -> list[Corpus
 
 
 def _read_pcm16_wav(path: Path) -> tuple[bytes, int]:
+    """모노 PCM16 WAV를 검증한 뒤 원본 PCM 바이트와 sample rate를 반환한다."""
+
     with wave.open(str(path), "rb") as wav_file:
         if wav_file.getnchannels() != 1 or wav_file.getsampwidth() != 2:
             raise ValueError(f"Expected mono PCM16 WAV: {path}")
@@ -116,6 +120,8 @@ def _read_pcm16_wav(path: Path) -> tuple[bytes, int]:
 
 
 def _edit_distance(reference: list[str], hypothesis: list[str]) -> int:
+    """두 token 배열의 Levenshtein 편집 거리를 동적 계획법으로 계산한다."""
+
     previous = list(range(len(hypothesis) + 1))
     for row, expected in enumerate(reference, start=1):
         current = [row]
@@ -128,7 +134,7 @@ def _edit_distance(reference: list[str], hypothesis: list[str]) -> int:
 
 
 def text_metrics(reference: str, hypothesis: str, entities: Iterable[str], numbers: Iterable[str]) -> dict[str, float]:
-    """Compute Korean-friendly whitespace WER, CER, entity and numeric recall."""
+    """한국어에 맞춘 공백 기준 WER, CER, entity 및 숫자 recall을 계산한다."""
 
     ref_words = reference.split()
     hyp_words = hypothesis.split()
@@ -137,6 +143,8 @@ def text_metrics(reference: str, hypothesis: str, entities: Iterable[str], numbe
     normalized_hypothesis = re.sub(r"\s+", "", hypothesis).lower()
 
     def recall(values: Iterable[str]) -> float:
+        """공백과 대소문자를 정규화한 정답 항목의 transcript 포함률을 구한다."""
+
         labels = [re.sub(r"\s+", "", value).lower() for value in values]
         return sum(value in normalized_hypothesis for value in labels) / len(labels) if labels else 1.0
 
@@ -149,7 +157,7 @@ def text_metrics(reference: str, hypothesis: str, entities: Iterable[str], numbe
 
 
 def vad_metrics(pcm: bytes, settings: CustomVoiceSettings, reference_segments: tuple[tuple[float, float], ...]) -> dict[str, float]:
-    """Compare detector activity with frame-level reference speech labels."""
+    """VAD의 프레임별 발화 판단을 정답 발화 구간과 비교한다."""
 
     detector = AdaptiveEnergyEndpointDetector(settings)
     frame_samples = settings.input_sample_rate * settings.input_frame_ms // 1000
@@ -176,13 +184,13 @@ def vad_metrics(pcm: bytes, settings: CustomVoiceSettings, reference_segments: t
         "vad_false_negative_rate": false_negative / max(1, positive),
         "false_endpoint_rate": max(0, endpoint_count - expected_segments) / max(1, expected_segments),
         "missed_endpoint_rate": max(0, expected_segments - endpoint_count) / max(1, expected_segments),
-        # In an offline corpus, a false speech-start is the measurable proxy for a false interruption.
+        # 오프라인 corpus에서는 잘못 감지된 speech-start를 false interruption의 측정 가능한 대리 지표로 쓴다.
         "false_interruption_rate": max(0, start_count - expected_segments) / max(1, expected_segments),
     }
 
 
 def signal_metrics(clean_pcm: bytes, enhanced_pcm: bytes, sample_rate: int) -> dict[str, float | None]:
-    """Calculate objective quality when optional PESQ/STOI packages are present."""
+    """선택형 PESQ/STOI 패키지가 있으면 clean 대비 객관적 음질 지표를 계산한다."""
 
     clean = np.frombuffer(clean_pcm, dtype="<i2").astype(np.float32) / 32768.0
     enhanced = np.frombuffer(enhanced_pcm, dtype="<i2").astype(np.float32) / 32768.0
@@ -207,6 +215,8 @@ def signal_metrics(clean_pcm: bytes, enhanced_pcm: bytes, sample_rate: int) -> d
 
 
 async def _process_audio(pcm: bytes, sample_rate: int, mode: str, settings: CustomVoiceSettings) -> tuple[bytes, dict[str, Any]]:
+    """PCM을 실제 NS와 리샘플러에 프레임 단위로 통과시키고 처리 통계를 반환한다."""
+
     suppressor = create_noise_suppressor(
         mode,
         rnnoise_library=settings.rnnoise_library,
@@ -229,6 +239,8 @@ async def _process_audio(pcm: bytes, sample_rate: int, mode: str, settings: Cust
 
 
 def _mean(records: list[dict[str, Any]], key: str) -> float | None:
+    """성공 record 중 값이 존재하는 항목만 골라 산술평균을 계산한다."""
+
     values = [float(record[key]) for record in records if record.get(key) is not None]
     return round(statistics.fmean(values), 5) if values else None
 
@@ -240,7 +252,7 @@ async def run_noise_suppression_benchmark(
     run_stt: bool = True,
     allow_partial_corpus: bool = False,
 ) -> dict[str, Any]:
-    """Run identical corpus items through every requested experiment config."""
+    """동일한 corpus 항목을 요청된 모든 실험 configuration으로 처리한다."""
 
     items = load_manifest(manifest_path, allow_partial_corpus)
     settings = CustomVoiceSettings.from_env()
@@ -288,8 +300,8 @@ async def run_noise_suppression_benchmark(
                     "clean_speech_distortion_snr_db": clean_distortion,
                 }
                 if config_name == "browser_ns":
-                    # Browser built-in DSP cost is outside the Python process and cannot be
-                    # inferred from a preprocessed WAV. Keep it unknown instead of reporting 0.
+                    # Browser 내장 DSP 비용은 Python process 밖에서 발생하므로 전처리된 WAV만으로
+                    # 추론할 수 없다. 비용이 0인 것처럼 보이지 않도록 미측정값으로 유지한다.
                     record["processing_latency_ms_mean"] = None
                     record["realtime_factor"] = None
                     record["cpu_usage_pct_during_processing"] = None
@@ -316,7 +328,7 @@ async def run_noise_suppression_benchmark(
 
 
 def print_noise_summary(results: dict[str, Any]) -> None:
-    """Print downstream quality and runtime cost side-by-side."""
+    """downstream 품질과 실행 비용을 configuration별 한 표로 출력한다."""
 
     print("\nNoise suppression downstream benchmark")
     print("=" * 132)
@@ -329,6 +341,8 @@ def print_noise_summary(results: dict[str, Any]) -> None:
         summary = config["summary"]
 
         def value(key: str, width: int = 7) -> str:
+            """표에 넣을 metric을 소수 셋째 자리 문자열 또는 미측정 기호로 바꾼다."""
+
             raw = summary.get(key)
             return f"{raw:.3f}" if raw is not None else "-"
 

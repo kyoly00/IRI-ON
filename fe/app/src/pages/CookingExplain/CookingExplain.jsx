@@ -40,6 +40,7 @@ export default function CookingExplain() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [embedError, setEmbedError] = useState(false);
+  const [timelineGenerating, setTimelineGenerating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +121,27 @@ export default function CookingExplain() {
     playerRef.current.playVideo();
   };
 
+  // 기존 DB 레시피도 전체 영상 fallback 대신 자막 검증을 거친 단계별 구간을 생성할 수 있다.
+  const generateTimeline = async () => {
+    if (!recipe || timelineGenerating) return;
+    setTimelineGenerating(true);
+    setError("");
+    try {
+      const response = await fetch(api(`/recipes/${recipe.recipe_id}/timeline`), {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "영상 구간을 만들지 못했어요.");
+      setRecipe((previous) => previous ? { ...previous, timeline_ready: true, steps: data.steps } : previous);
+      setCurrentStep(0);
+    } catch (reason) {
+      setError(reason.message || "영상 구간을 만들지 못했어요.");
+    } finally {
+      setTimelineGenerating(false);
+    }
+  };
+
   const latestAssistantMessage = [...voiceChat.messages]
     .reverse()
     .find((message) => message.role === "assistant" && message.parts.some((part) => part.type === "text"));
@@ -172,7 +194,12 @@ export default function CookingExplain() {
             </p>
           )}
           {!recipe.timeline_ready && (
-            <p className="timeline-notice">아직 구간 타임라인을 생성하지 않아 전체 영상과 원문 단계를 보여주고 있어요.</p>
+            <div className="timeline-notice">
+              <p>아직 구간 타임라인을 생성하지 않아 전체 영상과 원문 단계를 보여주고 있어요.</p>
+              <button onClick={generateTimeline} disabled={timelineGenerating}>
+                {timelineGenerating ? "자막·단계 검증 중…" : "단계별 영상 구간 만들기"}
+              </button>
+            </div>
           )}
         </section>
       ) : (

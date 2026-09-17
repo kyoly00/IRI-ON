@@ -1,13 +1,18 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from crud import recipe_crud, user_crud
 from db.session import get_db
-from schemas.recipe_schema import RecipeDetailSchema, RecipeSchema
+from schemas.recipe_schema import RecipeDetailSchema, RecipeSchema, YouTubeRecipeImportSchema
 from services.recommend_recipe import recommend_recipes
-from services.youtube_recipe_timeline import process_recipe_timeline
+from services.youtube_recipe_timeline import (
+    YouTubeRecipeDuplicateError,
+    import_youtube_recipe,
+    process_recipe_timeline,
+    resolve_timeline_policy,
+)
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -29,6 +34,48 @@ def get_recommended_recipes(user_id: int, db: Session = Depends(get_db)):
         return []
     recipes = recommend_recipes(db, user_id=user_id)
     return [recipe_crud.recipe_summary(recipe) for recipe in recipes]
+
+
+@router.post("/import-youtube", status_code=status.HTTP_201_CREATED)
+def import_recipe_from_youtube(
+    payload: YouTubeRecipeImportSchema,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """새 YouTube 링크를 먼저 검증·단계화하고 성공한 경우에만 DB 레시피로 등록한다."""
+
+    try:
+        policy = resolve_timeline_policy(
+            min_duration_seconds=payload.min_duration_seconds,
+            min_steps=payload.min_steps,
+            max_steps=payload.max_steps,
+        )
+        recipe = import_youtube_recipe(
+            db,
+            video_url=payload.video_url,
+            requested_name=payload.name,
+            difficulty=payload.difficulty,
+            model=payload.model,
+            policy=policy,
+        )
+    except YouTubeRecipeDuplicateError as duplicate:
+        # 중복은 오류가 아니라 이미 준비된 레시피로 안내할 수 있는 정상 결과다.
+        response.status_code = status.HTTP_200_OK
+        existing = recipe_crud.get_recipe_detail(db, duplicate.recipe_id)
+        return {
+            "created": False,
+            "message": f"이미 등록된 영상이에요. '{duplicate.recipe_name}' 레시피로 안내할게요.",
+            "recipe": existing,
+        }
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {
+        "created": True,
+        "message": "영상 자막을 검증하고 단계별 레시피를 만들었어요. 바로 음성 요리를 시작할 수 있어요.",
+        "recipe": recipe_crud.get_recipe_detail(db, recipe.recipe_id),
+    }
 
 
 @router.get("/{recipe_id}", response_model=RecipeDetailSchema)
@@ -57,13 +104,21 @@ def get_recipe_steps(recipe_id: int, db: Session = Depends(get_db)):
 def create_recipe_timeline(
     recipe_id: int,
     model: Optional[str] = None,
+    min_duration_seconds: Optional[int] = Query(None, ge=0, le=86_400),
+    min_steps: Optional[int] = Query(None, ge=1, le=60),
+    max_steps: Optional[int] = Query(None, ge=1, le=60),
     db: Session = Depends(get_db),
 ):
     recipe = recipe_crud.get_recipe_model_by_id(db, recipe_id)
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     try:
-        steps = process_recipe_timeline(db, recipe, model=model)
+        policy = resolve_timeline_policy(
+            min_duration_seconds=min_duration_seconds,
+            min_steps=min_steps,
+            max_steps=max_steps,
+        )
+        steps = process_recipe_timeline(db, recipe, model=model, policy=policy)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:

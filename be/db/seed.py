@@ -1,6 +1,7 @@
 # seed.py
 import csv
 import re
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from db.session import SessionLocal
 from models.recipe.recipe import Recipe, Category as RecipeCategory
@@ -83,6 +84,17 @@ def seed_recipes():
 def _number(value):
     match = re.search(r"\d+", value or "")
     return int(match.group()) if match else None
+
+
+def _decimal(value):
+    value = (value or "").strip()
+    try:
+        if "/" in value:
+            numerator, denominator = value.split("/", 1)
+            return Decimal(numerator) / Decimal(denominator)
+        return Decimal(value)
+    except (InvalidOperation, ZeroDivisionError):
+        return None
 
 
 def seed_youtube_recipes():
@@ -170,12 +182,21 @@ def seed_recipes_ingredients():
 
                     recipe_id = get_recipe_by_name(db, row["title"]).recipe_id
                     ingredient_id = get_ingredient_id_by_name(db, row["ingredients"]).ingredient_id
-                    recipe_ingredient = RecipeIngredient(
-                        recipe_id=recipe_id,
-                        ingredient_id=ingredient_id,
-                    )
+                    recipe_ingredient = RecipeIngredient(recipe_id=recipe_id, ingredient_id=ingredient_id,
+                                                         quantity=_decimal(row.get("quantity")), unit=(row.get("unit") or "").strip() or None)
                     db.add(recipe_ingredient)
                     existing_keys.append((row["title"], row["ingredients"]))
+            else:
+                # Existing databases were seeded before quantities were persisted.
+                for row in reader:
+                    recipe = get_recipe_by_name(db, row["title"])
+                    ingredient = get_ingredient_id_by_name(db, row["ingredients"])
+                    if not recipe or not ingredient:
+                        continue
+                    link = db.query(RecipeIngredient).filter_by(recipe_id=recipe.recipe_id, ingredient_id=ingredient.ingredient_id).first()
+                    if link and link.quantity is None:
+                        link.quantity = _decimal(row.get("quantity"))
+                        link.unit = (row.get("unit") or "").strip() or None
         db.commit()
     except Exception:
         db.rollback()

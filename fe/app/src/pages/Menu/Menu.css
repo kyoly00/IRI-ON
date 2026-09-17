@@ -91,6 +91,50 @@
   font-size: 18px;
 }
 
+/* 링크 등록은 기존 메뉴 선택과 분리해, 검증 중에도 현재 목록을 그대로 볼 수 있게 한다. */
+.menu-page .youtube-import-card {
+  margin: 0 20px 18px;
+  padding: 14px;
+  border: 1px solid #ffd4b3;
+  border-radius: 14px;
+  background: #fffaf5;
+}
+
+.menu-page .youtube-import-card h3,
+.menu-page .youtube-import-card p {
+  margin: 0;
+}
+
+.menu-page .youtube-import-card h3 { font-size: 15px; color: #d9661a; }
+.menu-page .youtube-import-card > p { margin-top: 5px; font-size: 12px; color: #6f6257; }
+.menu-page .youtube-import-card form { display: grid; gap: 8px; margin-top: 10px; }
+.menu-page .youtube-import-card input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #f0c19c;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.menu-page .youtube-import-card details { color: #78675b; font-size: 12px; }
+.menu-page .youtube-import-card summary { cursor: pointer; }
+.menu-page .youtube-policy-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.menu-page .youtube-policy-inputs label { font-size: 11px; }
+.menu-page .youtube-policy-inputs input { margin-top: 4px; padding: 7px; font-size: 12px; }
+.menu-page .youtube-import-card button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: #ff9844;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.menu-page .youtube-import-card button:disabled { opacity: .6; cursor: wait; }
+.menu-page .youtube-import-message { margin-top: 8px !important; color: #9b4a12 !important; }
+
 /* 카테고리 바 */
 .menu-page .category-bar {
   display: flex;

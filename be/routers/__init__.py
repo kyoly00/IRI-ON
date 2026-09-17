@@ -3,6 +3,7 @@ from .recipes import router as recipes_router
 from .realtime_openAI import router as realtime_router
 from .ingredients import router as ingredients_router
 from .tools import router as tools_router
+from .households import router as households_router
 from custom_voice.router import router as custom_voice_router
 
 all_routers = [
@@ -11,5 +12,6 @@ all_routers = [
     realtime_router,
     ingredients_router,
     tools_router,
+    households_router,
     custom_voice_router,
 ]

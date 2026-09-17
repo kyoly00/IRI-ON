@@ -13,6 +13,7 @@ import Welcome2 from "./pages/Welcome/Welcome2.jsx";
 import Community from "./pages/Community/Community.jsx";
 import ProfileModify from "./pages/Profile/Profile_modify.jsx";
 import Personal from "./pages/Community/Personal.jsx";
+import RecipeCheck from "./pages/RecipeCheck/RecipeCheck.jsx";
 
 
 import "./index.css";
@@ -41,6 +42,7 @@ export default function App() {
             {/* 하단바 없는 독립 페이지 */}
             <Route path="/fridgecomplete" element={<FridgeComplete />} />
             <Route path="/CookingExplain/:id" element={<CookingExplain />} />
+            <Route path="/recipes/:id/check" element={<RecipeCheck />} />
 
             {/* 잘못된 경로 처리 */}
             <Route path="*" element={<Navigate to="/" replace />} />

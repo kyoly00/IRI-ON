@@ -312,7 +312,7 @@ class CustomVoiceRuntime:
         await self._send_json({"type": "playback_stop"})
 
     async def _process_audio_turn(self, pcm: bytes, trace: TurnTrace) -> None:
-        """STT와 PII/prosody sidecar를 병렬 실행한 뒤 응답 pipeline으로 넘긴다."""
+        """prosody gate를 먼저 검사하고 STT·PII 필터를 거쳐 응답 pipeline으로 넘긴다."""
 
         try:
             # 아주 낮은 에너지의 입력은 STT prompt hallucination과 불필요한 API 호출을
