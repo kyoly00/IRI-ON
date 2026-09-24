@@ -1,4 +1,5 @@
-export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+// Use Vite's proxy locally when no deployment API URL is configured.
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 export const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? "";
 
 const ensureLeadingSlash = (path = "") =>
@@ -22,11 +23,22 @@ export const api = (path = "") => buildUrl(API_BASE, path);
 export const ws = (path = "") =>
   WS_BASE ? buildUrl(WS_BASE, path) : ensureLeadingSlash(path);
 
+export function authFetch(path, init = {}) {
+  const token = localStorage.getItem("access_token");
+  return fetch(api(path), {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
 /**
  * 간단한 GET 래퍼. 인증 쿠키 포함(fetch default 옵션 통일 목적).
  */
 export async function get(path, init) {
-  const r = await fetch(api(path), { ...(init || {}), credentials: "include" });
+  const r = await authFetch(path, { ...(init || {}), credentials: "include" });
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
@@ -35,7 +47,7 @@ export async function get(path, init) {
  * JSON body를 포함한 POST 래퍼.
  */
 export async function post(path, body, init) {
-  const r = await fetch(api(path), {
+  const r = await authFetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

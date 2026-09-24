@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
+from models.user.user import User
+from security import get_current_user
 
 from crud import recipe_crud, user_crud
 from db.session import get_db
@@ -28,11 +30,10 @@ def get_all_recipes(
 
 
 # 고정 경로는 /{recipe_id}보다 먼저 선언해야 숫자 변환 422를 피할 수 있다.
-@router.get("/recommendations/{user_id}", response_model=List[RecipeSchema])
-def get_recommended_recipes(user_id: int, db: Session = Depends(get_db)):
-    if not user_crud.get_user_by_id(db, user_id):
-        return []
-    recipes = recommend_recipes(db, user_id=user_id)
+@router.get("/recommendations", response_model=List[RecipeSchema])
+def get_recommended_recipes(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """접근 토큰으로 확인된 현재 사용자의 맞춤 레시피만 반환합니다."""
+    recipes = recommend_recipes(db, user_id=current_user.user_id)
     return [recipe_crud.recipe_summary(recipe) for recipe in recipes]
 
 
@@ -40,6 +41,7 @@ def get_recommended_recipes(user_id: int, db: Session = Depends(get_db)):
 def import_recipe_from_youtube(
     payload: YouTubeRecipeImportSchema,
     response: Response,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """새 YouTube 링크를 먼저 검증·단계화하고 성공한 경우에만 DB 레시피로 등록한다."""
@@ -107,6 +109,7 @@ def create_recipe_timeline(
     min_duration_seconds: Optional[int] = Query(None, ge=0, le=86_400),
     min_steps: Optional[int] = Query(None, ge=1, le=60),
     max_steps: Optional[int] = Query(None, ge=1, le=60),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     recipe = recipe_crud.get_recipe_model_by_id(db, recipe_id)

@@ -108,6 +108,7 @@
 .menu-page .youtube-import-card h3 { font-size: 15px; color: #d9661a; }
 .menu-page .youtube-import-card > p { margin-top: 5px; font-size: 12px; color: #6f6257; }
 .menu-page .youtube-import-card form { display: grid; gap: 8px; margin-top: 10px; }
+.menu-page .youtube-import-toggle { width: 100%; margin-top: 10px; }
 .menu-page .youtube-import-card input {
   box-sizing: border-box;
   width: 100%;

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -337,7 +337,8 @@ export function useOpenAIVoiceChat(
 
     try {
       // api() 함수 사용으로 통일
-      const response = await fetch(api(`/assistant/session-info/${userId}/${recipeId}`), {
+      const query = props?.currentStep != null ? `?current_step=${props.currentStep}` : "";
+      const response = await fetch(api(`/assistant/session-info/${userId}/${recipeId}${query}`), {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -614,6 +615,27 @@ export function useOpenAIVoiceChat(
                 action,
                 target_step: targetStep,
                 message: `요리 영상 단계를 ${action === 'set' ? `${targetStep}단계로` : action === 'next' ? '다음 단계로' : '이전 단계로'} 이동했습니다.`,
+              };
+              break;
+            }
+            case "control_video": {
+              const action = toolArgs?.action || "pause";
+              const targetSeconds = toolArgs?.target_seconds != null ? Number(toolArgs.target_seconds) : undefined;
+              const offsetSeconds = toolArgs?.offset_seconds != null ? Number(toolArgs.offset_seconds) : undefined;
+              console.log(`🎬 [Video Control] action=${action}, targetSeconds=${targetSeconds}, offsetSeconds=${offsetSeconds}`);
+              props?.onAssistantEvent?.({
+                type: "video_control",
+                action,
+                targetSeconds,
+                offsetSeconds,
+                rollbackSeconds: 1.5,
+              });
+              toolResult = {
+                success: true,
+                action,
+                targetSeconds,
+                offsetSeconds,
+                message: `요리 영상을 ${action === 'pause' ? '일시정지' : action === 'play' ? '재생' : `${targetSeconds ?? offsetSeconds}초로 이동`}했습니다.`,
               };
               break;
             }

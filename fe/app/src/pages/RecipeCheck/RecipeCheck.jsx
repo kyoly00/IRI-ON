@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../../lib/api";
+import { authFetch } from "../../lib/api";
 import "./RecipeCheck.css";
 
 export default function RecipeCheck() {
@@ -15,7 +15,7 @@ export default function RecipeCheck() {
 
   useEffect(() => {
     if (!userId) return navigate("/");
-    fetch(api(`/households/me?user_id=${userId}`)).then((r) => r.json()).then((data) => {
+    authFetch("/households/me").then((r) => r.json()).then((data) => {
       setHousehold(data.household);
       if (!data.household) setMessage("공유 냉장고를 먼저 만들어 주세요.");
     }).catch(() => setMessage("가정 정보를 불러오지 못했습니다.")).finally(() => setLoading(false));
@@ -24,7 +24,7 @@ export default function RecipeCheck() {
   useEffect(() => {
     if (!household) return;
     setLoading(true);
-    fetch(api(`/households/${household.household_id}/recipes/${id}/availability?user_id=${userId}`), {
+    authFetch(`/households/${household.household_id}/recipes/${id}/availability`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servings }),
     }).then(async (r) => { const data = await r.json(); if (!r.ok) throw new Error(data.detail); return data; })
       .then(setResult).catch((e) => setMessage(e.message || "재료를 비교하지 못했습니다.")).finally(() => setLoading(false));
@@ -33,7 +33,7 @@ export default function RecipeCheck() {
   const requestPurchase = async () => {
     const shortages = result?.shortages || [];
     if (!shortages.length) return navigate(`/CookingExplain/${id}`);
-    const response = await fetch(api(`/households/${household.household_id}/purchase-requests?user_id=${userId}`), {
+    const response = await authFetch(`/households/${household.household_id}/purchase-requests`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipe_id: Number(id), servings, items: shortages.map((item) => ({ ingredient_id: item.ingredient_id, quantity: item.shortage_quantity, unit: item.unit })) }),
     });

@@ -83,6 +83,55 @@ export default function CookingExplain() {
       moveToStep(Number(event.step) - 1);
       return;
     }
+    if (event.type === "video_control") {
+      const player = playerRef.current;
+      if (!player) return;
+      const action = event.action;
+      if (action === "pause") {
+        // 사용자 발화 시점을 고려하여 딜레이(약 1.5초)만큼 되감은 뒤 정지
+        try {
+          const currentTime = typeof player.getCurrentTime === "function" ? player.getCurrentTime() : 0;
+          const rollback = Number(event.rollbackSeconds) || 1.5;
+          const targetTime = Math.max(0, currentTime - rollback);
+          if (typeof player.seekTo === "function") {
+            player.seekTo(targetTime, true);
+          }
+          if (typeof player.pauseVideo === "function") {
+            player.pauseVideo();
+          }
+        } catch (err) {
+          console.error("Video pause error:", err);
+        }
+      } else if (action === "play") {
+        try {
+          if (typeof player.playVideo === "function") {
+            player.playVideo();
+          }
+        } catch (err) {
+          console.error("Video play error:", err);
+        }
+      } else if (action === "seek") {
+        try {
+          if (event.targetSeconds != null) {
+            // 절대 시간 이동 (예: 1분 30초 = 90초)
+            const target = Math.max(0, Number(event.targetSeconds));
+            if (typeof player.seekTo === "function") {
+              player.seekTo(target, true);
+            }
+          } else if (event.offsetSeconds != null) {
+            // 상대 시간 이동 (예: 10초 전 = -10, 30초 뒤 = +30)
+            const currentTime = typeof player.getCurrentTime === "function" ? player.getCurrentTime() : 0;
+            const target = Math.max(0, currentTime + Number(event.offsetSeconds));
+            if (typeof player.seekTo === "function") {
+              player.seekTo(target, true);
+            }
+          }
+        } catch (err) {
+          console.error("Video seek error:", err);
+        }
+      }
+      return;
+    }
     if (event.type !== "navigate_step") return;
     if (event.action === "next") setCurrentStep((value) => Math.min(value + 1, Math.max(steps.length - 1, 0)));
     if (event.action === "prev") setCurrentStep((value) => Math.max(value - 1, 0));
@@ -94,6 +143,12 @@ export default function CookingExplain() {
   const voiceChat = useVoiceChat({
     userId,
     recipeId,
+    currentStep,
+    stepContext: activeStep ? {
+      step: currentStep + 1,
+      text: activeStep.text,
+      duration: activeStep.step_len,
+    } : undefined,
     onAssistantEvent: handleAssistantEvent,
   });
 

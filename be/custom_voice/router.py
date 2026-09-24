@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -10,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, WebSocket
 
 from db.session import SessionLocal
+from security import verify_ws_token
 
 from .config import CustomVoiceSettings
 from .context import build_session_context
@@ -73,6 +76,22 @@ async def custom_voice_websocket(
 ) -> None:
     """브라우저 PCM과 custom runtime을 1:1로 연결한다."""
 
+    await websocket.accept()
+
+    # 1) WSS 2단계 인증 프로토콜: 연결 직후 5초 이내 최초 수신 프레임 { "type": "auth", "token": "<JWT>" } 검증
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        auth_msg = json.loads(raw_auth)
+        if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+            await websocket.close(code=4401, reason="Unauthorized: Missing or invalid auth frame")
+            return
+        token = str(auth_msg["token"])
+        verify_ws_token(token, expected_user_id=user_id)
+        await websocket.send_json({"type": "auth_success", "user_id": user_id})
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        await websocket.close(code=4401, reason=f"Unauthorized: {exc}")
+        return
+
     try:
         context = _load_context(user_id, recipe_id)
         runtime = CustomVoiceRuntime(
@@ -82,10 +101,11 @@ async def custom_voice_websocket(
             recipe_id=recipe_id,
             system_prompt=context["system_prompt"],
             settings=CustomVoiceSettings.from_env(),
+            recipe_name=context.get("recipe_name"),
+            materials=context.get("materials"),
         )
     except (LookupError, NoiseSuppressionError, ProviderError, ValueError) as exc:
         # handshake 이전 오류도 브라우저가 읽을 수 있는 JSON event로 변환한다.
-        await websocket.accept()
         await websocket.send_json({"type": "error", "message": str(exc)})
         await websocket.close(code=1011)
         return

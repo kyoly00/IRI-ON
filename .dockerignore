@@ -1,0 +1,9 @@
+.git
+.env
+**/.env
+**/__pycache__
+**/*.pyc
+fe/app/node_modules
+fe/app/dist
+be/conversation_logs
+be/evaluation_results

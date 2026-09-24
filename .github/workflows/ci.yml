@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: chefyam_test
+          MYSQL_USER: chefyam
+          MYSQL_PASSWORD: chefyam
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot" --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: mysql+pymysql://chefyam:chefyam@127.0.0.1:3306/chefyam_test?charset=utf8mb4
+      JWT_SECRET: test-secret-with-at-least-thirty-two-characters
+      OPENAI_API_KEY: test-key
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: gitleaks/gitleaks-action@v2
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements.txt pytest pip-audit
+      - run: pip-audit -r requirements.txt
+      - run: cd be && alembic upgrade head && pytest -q
+      - uses: actions/setup-node@v4
+        with: {node-version: '20', cache: npm, cache-dependency-path: fe/app/package-lock.json}
+      - run: npm ci && npm run lint && npm run build
+        working-directory: fe/app
+      - run: docker build -t iri-on:${{ github.sha }} .
+      - name: Scan container image for critical and high vulnerabilities
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: iri-on:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true

@@ -1,103 +1,150 @@
-from typing import List
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from db.session import get_db
+
+from core.rate_limit import RateLimiter
 import crud.user_crud as user_crud
-from schemas.user_profile_schema import UserProfileSchema
-from schemas.user_id_schema import UserIDSchema
-from schemas.user_sign_up_schema import UserSignUpSchema
-from schemas.user_login_schema import UserLoginSchema, UserLoginResponseSchema
+from db.session import get_db
+from models.user.user import User
 from schemas.ingredient_id_schema import IngredientIDSchema
 from schemas.tool_id_schema import ToolIDSchema
+from schemas.user_id_schema import UserIDSchema
+from schemas.user_login_schema import (
+    RefreshTokenRequestSchema,
+    TokenRefreshResponseSchema,
+    UserLoginResponseSchema,
+    UserLoginSchema,
+)
+from schemas.user_profile_schema import UserProfileSchema
+from schemas.user_sign_up_schema import UserSignUpSchema
+from security import (
+    bearer,
+    create_access_token,
+    create_token_pair,
+    decode_token,
+    get_current_user,
+    revoke_token,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# 회원가입 - 유저 생성
-@router.post("/signUp", response_model=UserIDSchema)
-def create_user(user: UserSignUpSchema, db: Session = Depends(get_db)):
-    """새로운 회원을 가입시킵니다."""
-    try:
-        new_user = user_crud.add_user(db, user)
-        return UserIDSchema(user_id=new_user.user_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
 
-# 로그인 - 유저 인증
-@router.post("/login", response_model=UserLoginResponseSchema)
-@router.post("/signIn", response_model=UserLoginResponseSchema)
-def login_user(login_data: UserLoginSchema, db: Session = Depends(get_db)):
-    """아이디(이메일)와 비밀번호로 로그인합니다."""
-    user = user_crud.authenticate_user(db, login_data.id, login_data.password)
+@router.post("/signUp", response_model=UserIDSchema, status_code=status.HTTP_201_CREATED)
+def create_user(payload: UserSignUpSchema, db: Session = Depends(get_db)):
+    try:
+        user = user_crud.add_user(db, payload)
+        return UserIDSchema(user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/login",
+    response_model=UserLoginResponseSchema,
+    dependencies=[Depends(RateLimiter(requests=5, window=60, key_prefix="auth_login"))],
+)
+@router.post(
+    "/signIn",
+    response_model=UserLoginResponseSchema,
+    dependencies=[Depends(RateLimiter(requests=5, window=60, key_prefix="auth_login"))],
+)
+def login_user(payload: UserLoginSchema, db: Session = Depends(get_db)):
+    """인증 정보를 확인하고 보호 API에서 사용할 Bearer 토큰을 발급합니다."""
+    user = user_crud.authenticate_user(db, payload.id, payload.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 또는 비밀번호가 일치하지 않습니다.",
-        )
-    
-    # 프로필 작성 여부 체크 (이름이나 도구/알레르기 설정 여부)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     has_profile = bool(user.name and user.name != "셰프") or bool(user.allergy) or user.can_use_fire or user.can_use_knife
-    
+    tokens = create_token_pair(user.user_id)
     return UserLoginResponseSchema(
         user_id=user.user_id,
         id=user.id,
         name=user.name or "셰프",
         has_profile=has_profile,
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
     )
 
-# 프로필 생성 / 업데이트
-@router.post("/profile")
-def create_user_profile(user_id: int, user_profile: UserProfileSchema, db: Session = Depends(get_db)):
-    user = user_crud.get_user_by_id(db, user_id)
+
+@router.post(
+    "/refresh",
+    response_model=TokenRefreshResponseSchema,
+    dependencies=[Depends(RateLimiter(requests=10, window=60, key_prefix="auth_refresh"))],
+)
+def refresh_token_endpoint(payload: RefreshTokenRequestSchema, db: Session = Depends(get_db)):
+    """Refresh Token을 검증하여 새로운 Access Token 및 Refresh Token을 발급합니다."""
+    token_data = decode_token(payload.refresh_token, expected_type="refresh")
+    try:
+        user_id = int(token_data["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from exc
+
+    user = db.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="존재하지 않는 유저입니다.")
-    updated_user = user_crud.save_profile(db, user_id, user_profile)
-    return {
-        "success": True,
-        "user_id": updated_user.user_id,
-        "name": updated_user.name,
-    }
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
 
-# 사용자가 가지고 있는 재료 저장
-@router.post("/ingredients", response_model=UserIDSchema)
-def save_user_ingredients(user_id: int, ingredients_ids: List[IngredientIDSchema], db: Session = Depends(get_db)):
-    user_crud.save_ingredients(db, user_id, ingredients_ids)
-    return UserIDSchema(user_id=user_id)
+    # Token rotation: 기존 refresh token 무효화
+    revoke_token(payload.refresh_token)
 
-# 사용자가 가지고 있는 재료 조회
-@router.get("/ingredients")
-@router.get("/{user_id}/ingredients")
-def get_user_ingredients(user_id: int, db: Session = Depends(get_db)):
-    """사용자가 저장한 재료 ID 목록을 반환합니다."""
-    return user_crud.get_user_ingredients_ids(db, user_id)
+    tokens = create_token_pair(user.user_id)
+    return TokenRefreshResponseSchema(
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
+        token_type="bearer",
+    )
 
-# 사용자가 가지고 있는 도구 저장
-@router.post("/tools", response_model=UserIDSchema)
-def save_user_tools(user_id: int, tools_ids: List[ToolIDSchema], db: Session = Depends(get_db)):
-    user_crud.save_tools(db, user_id, tools_ids)
-    return UserIDSchema(user_id=user_id)
 
-# 사용자가 가지고 있는 도구 조회
-@router.get("/tools")
-@router.get("/{user_id}/tools")
-def get_user_tools(user_id: int, db: Session = Depends(get_db)):
-    """사용자가 저장한 도구 ID 목록을 반환합니다."""
-    return user_crud.get_user_tools_ids(db, user_id)
+@router.post("/logout")
+def logout_user(
+    payload: Optional[RefreshTokenRequestSchema] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    current_user: User = Depends(get_current_user),
+):
+    """현재 Access Token 및 (제공 시) Refresh Token을 Redis 블랙리스트에 등록합니다."""
+    if credentials and credentials.credentials:
+        revoke_token(credentials.credentials)
+    if payload and payload.refresh_token:
+        revoke_token(payload.refresh_token)
+    return {"success": True, "message": "Successfully logged out"}
 
-# 사용자 프로필 조회 (쿼리 파라미터 & 경로 파라미터 모두 지원)
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {"user_id": current_user.user_id, "id": current_user.id, "name": current_user.name or "셰프"}
+
+
+@router.post("/profile")
+def save_profile(payload: UserProfileSchema, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """접근 토큰에서 확인된 현재 사용자 프로필만 수정합니다."""
+    user = user_crud.save_profile(db, current_user.user_id, payload)
+    return {"success": True, "user_id": user.user_id, "name": user.name}
+
+
 @router.get("/profile")
-@router.get("/{user_id}/profile")
-def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-    profile = user_crud.get_user_by_id(db, user_id)
-    if not profile:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {
-        "name": profile.name,
-        "can_use_fire": profile.can_use_fire,
-        "can_use_knife": profile.can_use_knife,
-        "can_use_peeler": profile.can_use_peeler,
-        "can_use_scissors": profile.can_use_scissors,
-        "allergy": profile.allergy or "",
-    }
+def get_profile(current_user: User = Depends(get_current_user)):
+    return {"name": current_user.name, "can_use_fire": current_user.can_use_fire,
+            "can_use_knife": current_user.can_use_knife, "can_use_peeler": current_user.can_use_peeler,
+            "can_use_scissors": current_user.can_use_scissors, "allergy": current_user.allergy or ""}
+
+
+@router.post("/ingredients", response_model=UserIDSchema)
+def save_ingredients(payload: List[IngredientIDSchema], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_crud.save_ingredients(db, current_user.user_id, payload)
+    return UserIDSchema(user_id=current_user.user_id)
+
+
+@router.get("/ingredients")
+def get_ingredients(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return user_crud.get_user_ingredients_ids(db, current_user.user_id)
+
+
+@router.post("/tools", response_model=UserIDSchema)
+def save_tools(payload: List[ToolIDSchema], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_crud.save_tools(db, current_user.user_id, payload)
+    return UserIDSchema(user_id=current_user.user_id)
+
+
+@router.get("/tools")
+def get_tools(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return user_crud.get_user_tools_ids(db, current_user.user_id)

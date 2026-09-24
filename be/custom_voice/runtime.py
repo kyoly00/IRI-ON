@@ -20,6 +20,7 @@ from uuid import uuid4
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .audio import AdaptiveEnergyEndpointDetector, ProsodyExtractor, ProsodyMetadata
+from .silero_vad import create_vad_detector
 from .config import CustomVoiceSettings
 from .noise_suppression import (
     AntiAliasResampler,
@@ -52,10 +53,19 @@ class SessionState(str, Enum):
 class SentenceChunker:
     """LLM token delta를 TTS가 자연스럽게 읽을 짧은 문장으로 누적한다."""
 
-    def __init__(self, minimum_chars: int = 16, maximum_chars: int = 110) -> None:
+    def __init__(
+        self,
+        minimum_chars: int = 14,
+        maximum_chars: int = 100,
+        first_chunk_min_chars: Optional[int] = None,
+    ) -> None:
         self.minimum_chars = minimum_chars
         self.maximum_chars = maximum_chars
+        self.first_chunk_min_chars = (
+            first_chunk_min_chars if first_chunk_min_chars is not None else min(6, minimum_chars)
+        )
         self._buffer = ""
+        self._is_first_chunk = True
 
     def feed(self, delta: str) -> list[str]:
         """문장부호 또는 최대 길이에 도달한 완성 chunk만 반환한다."""
@@ -70,6 +80,7 @@ class SentenceChunker:
             self._buffer = self._buffer[split_at:].lstrip()
             if chunk:
                 chunks.append(chunk)
+                self._is_first_chunk = False
         return chunks
 
     def flush(self) -> Optional[str]:
@@ -77,18 +88,20 @@ class SentenceChunker:
 
         value = self._buffer.strip()
         self._buffer = ""
+        self._is_first_chunk = True
         return value or None
 
     def _find_boundary(self) -> Optional[int]:
         """너무 짧은 합성을 피하면서 가장 이른 안전한 문장 경계를 찾는다."""
 
-        if len(self._buffer) >= self.minimum_chars:
+        min_len = self.first_chunk_min_chars if self._is_first_chunk else self.minimum_chars
+        if len(self._buffer) >= min_len:
             for index, character in enumerate(self._buffer, start=1):
-                if index >= self.minimum_chars and character in ".!?。！？\n":
+                if index >= min_len and character in ".!?。！？\n~":
                     return index
         if len(self._buffer) >= self.maximum_chars:
             space = self._buffer.rfind(" ", 0, self.maximum_chars)
-            return space + 1 if space >= self.minimum_chars else self.maximum_chars
+            return space + 1 if space >= min_len else self.maximum_chars
         return None
 
 
@@ -103,10 +116,13 @@ class CustomVoiceRuntime:
         recipe_id: int,
         system_prompt: str,
         settings: CustomVoiceSettings,
+        recipe_name: str | None = None,
+        materials: str | None = None,
     ) -> None:
         self.websocket = websocket
         self.settings = settings
-        self.detector = AdaptiveEnergyEndpointDetector(settings)
+        self.detector = create_vad_detector(settings)
+        self._turn_speech_segments: list[tuple[str, float, float]] = []
         self.noise_suppressor = create_noise_suppressor(
             settings.noise_suppression,
             rnnoise_library=settings.rnnoise_library,
@@ -118,6 +134,14 @@ class CustomVoiceRuntime:
         self.providers = OpenAIHttpProviders(settings)
         self.trace = CustomTraceStore(session_id, user_id, recipe_id, system_prompt)
         self.tools = ToolExecutor(self._send_json)
+        self.recipe_name = recipe_name or ""
+        hint_parts = ["한국어 요리 대화."]
+        if recipe_name:
+            hint_parts.append(f"요리: {recipe_name}.")
+        if materials:
+            hint_parts.append(f"재료: {materials[:120]}.")
+        hint_parts.append("조리 단계 안내.")
+        self.stt_prompt = " ".join(hint_parts)
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         self._send_lock = asyncio.Lock()
         self._response_task: Optional[asyncio.Task[None]] = None
@@ -128,10 +152,27 @@ class CustomVoiceRuntime:
         self._closed = False
         self.state = SessionState.CONNECTING
 
+    def _trim_messages(self, max_turns: int = 3) -> None:
+        """system 프롬프트는 유지하고 최근 대화 3턴(user-assistant)을 슬라이딩 윈도우로 유지한다."""
+        if len(self.messages) <= 1:
+            return
+        system_msg = self.messages[0]
+        history = self.messages[1:]
+        user_indices = [i for i, m in enumerate(history) if m.get("role") == "user"]
+        if len(user_indices) > max_turns:
+            cutoff = user_indices[-max_turns]
+            history = history[cutoff:]
+        self.messages = [system_msg] + history
+
     async def run(self) -> None:
         """handshake 후 오디오/제어 메시지를 받고 종료 시 provider와 trace를 정리한다."""
 
-        await self.websocket.accept()
+        try:
+            from starlette.websockets import WebSocketState
+            if getattr(self.websocket, "client_state", None) != WebSocketState.CONNECTED:
+                await self.websocket.accept()
+        except Exception:
+            pass
         logger.info(
             "[CustomVoice:%s] session started user=%s recipe=%s noise_suppression=%s transport_rate=%s",
             self.trace.session_id,
@@ -208,12 +249,119 @@ class CustomVoiceRuntime:
             text = str(message.get("text") or message.get("message") or "").strip()
             if text:
                 await self._begin_text_turn(text)
+        elif message_type in {"resume_session", "reconnect"}:
+            current_step = message.get("current_step")
+            step_text = message.get("step_text")
+            history = message.get("history") or []
+            if isinstance(history, list) and history:
+                for item in history[-6:]:
+                    role = item.get("role")
+                    content = item.get("text") or item.get("content")
+                    if role in {"user", "assistant"} and content:
+                        self.messages.append({"role": role, "content": str(content)})
+                self._trim_messages(max_turns=3)
+            if current_step is not None and int(current_step) > 0:
+                step_num = int(current_step) + 1
+                greeting = (
+                    f"대화가 다시 연결되었어. 사용자는 지금 {step_num}단계"
+                    + (f"('{step_text}')" if step_text else "")
+                    + "를 진행 중이야. 손 씻기 같은 처음 인사는 절대 하지 말고, "
+                    + f"사용자를 안심시키며 {step_num}단계를 이어서 친절하게 안내해줘."
+                )
+                await self._begin_text_turn(greeting, internal=True)
+            else:
+                await self._begin_text_turn(
+                    "대화를 시작해. 밝게 인사하고, 손을 씻은 뒤 준비되면 말해 달라고 짧게 안내해.",
+                    internal=True,
+                )
         elif message_type == "generate_greeting":
-            await self._begin_text_turn(
-                "대화를 시작해. 밝게 인사하고, 손을 씻은 뒤 준비되면 말해 달라고 짧게 안내해.",
-                internal=True,
-            )
+            current_step = message.get("current_step")
+            step_text = message.get("step_text")
+            if current_step is not None and int(current_step) > 0:
+                step_num = int(current_step) + 1
+                greeting = (
+                    f"대화가 다시 연결되었어. 사용자는 지금 {step_num}단계"
+                    + (f"('{step_text}')" if step_text else "")
+                    + "를 진행 중이야. 손 씻기 같은 처음 인사는 절대 하지 말고, "
+                    + f"사용자를 안심시키며 {step_num}단계를 이어서 친절하게 안내해줘."
+                )
+                await self._begin_text_turn(greeting, internal=True)
+            else:
+                await self._begin_text_turn(
+                    "대화를 시작해. 밝게 인사하고, 손을 씻은 뒤 준비되면 말해 달라고 짧게 안내해.",
+                    internal=True,
+                )
+        elif message_type == "playback_progress":
+            played_ms = float(message.get("played_duration_ms") or 0.0)
+            interrupted = bool(message.get("interrupted", False))
+            if interrupted and played_ms > 0:
+                self._truncate_last_assistant_speech(played_ms)
         return False
+
+    def _truncate_last_assistant_speech(self, played_ms: float) -> None:
+        """barge-in으로 중단된 실제 오디오 청취 위치에 맞춰 assistant 메시지를 잘라낸다 (State Rollback)."""
+        if not self._turn_speech_segments:
+            return
+
+        reconstructed_parts: list[str] = []
+        for text, start_ms, end_ms in self._turn_speech_segments:
+            if played_ms >= end_ms:
+                reconstructed_parts.append(text)
+            elif played_ms > start_ms:
+                seg_duration = end_ms - start_ms
+                if seg_duration > 0:
+                    ratio = min(1.0, max(0.0, (played_ms - start_ms) / seg_duration))
+                    char_count = max(1, int(round(len(text) * ratio)))
+                    partial = text[:char_count].rstrip()
+                    if partial:
+                        reconstructed_parts.append(partial)
+                break
+            else:
+                break
+
+        truncated_text = "".join(reconstructed_parts).strip()
+        if truncated_text:
+            if not truncated_text.endswith("..."):
+                truncated_text += "..."
+        else:
+            truncated_text = "..."
+
+        for msg in reversed(self.messages):
+            if msg.get("role") == "assistant" and msg.get("content"):
+                original = msg["content"]
+                msg["content"] = truncated_text
+                logger.info(
+                    "[CustomVoice:%s] State Rollback: assistant speech truncated (played=%.1fms)\n  Original: %r\n  Truncated: %r",
+                    self.trace.session_id,
+                    played_ms,
+                    original,
+                    msg["content"],
+                )
+                break
+
+        if self.trace.active_turn is not None:
+            self.trace.active_turn.agent_response = truncated_text
+            self.trace.add_entry(
+                "state_rollback",
+                truncated_text,
+                {"played_ms": played_ms},
+            )
+
+    @staticmethod
+    def _get_default_acknowledgment(tool_calls: list[dict[str, Any]]) -> str:
+        """도구 호출 시 LLM이 선행 발화를 생략한 경우 즉시 출력할 자연스러운 한국어 확인 멘트."""
+        names = [str((call.get("function") or {}).get("name", "")) for call in tool_calls]
+        if any("nutrition" in n.lower() for n in names):
+            return "잠시만 기다려봐, 영양 정보를 찾아볼게!"
+        if any("search" in n.lower() for n in names):
+            return "잠시만요, 관련 정보를 검색해 볼게!"
+        if any("coupang" in n.lower() for n in names):
+            return "재료를 구매할 수 있는 링크를 찾아볼게!"
+        if any("video" in n.lower() for n in names):
+            return "네, 영상을 조작해 볼게!"
+        if any("step" in n.lower() for n in names):
+            return "단계를 확인해 볼게!"
+        return "잠시만 기다려줘!"
 
     async def _handle_audio(self, pcm: bytes) -> None:
         """transport PCM에 optional NS/resampling을 적용한 뒤 VAD 상태를 연결한다."""
@@ -288,6 +436,9 @@ class CustomVoiceRuntime:
     async def _interrupt_active_response(self) -> None:
         """barge-in 시 서버 생성 task와 클라이언트에 예약된 오디오를 함께 중단한다."""
 
+        # 브라우저에 대기 중이거나 재생 중인 오디오를 즉시 멈추도록 항상 playback_stop을 우선 전송한다.
+        await self._send_json({"type": "playback_stop"})
+
         task = self._response_task
         if not task or task.done():
             return
@@ -309,7 +460,6 @@ class CustomVoiceRuntime:
                 previous.turn_id,
                 (stopped_at - interrupted_at) * 1000.0,
             )
-        await self._send_json({"type": "playback_stop"})
 
     async def _process_audio_turn(self, pcm: bytes, trace: TurnTrace) -> None:
         """prosody gate를 먼저 검사하고 STT·PII 필터를 거쳐 응답 pipeline으로 넘긴다."""
@@ -339,7 +489,7 @@ class CustomVoiceRuntime:
                 return
 
             logger.info("[CustomVoice:%s] STT request turn=%s", self.trace.session_id, trace.turn_id)
-            raw_transcript = await self.providers.transcribe(pcm)
+            raw_transcript = await self.providers.transcribe(pcm, prompt=self.stt_prompt)
             trace.stt_completed_ts = time.time()
             sanitized = self.redactor.redact(raw_transcript)
             trace.user_transcript = sanitized
@@ -372,6 +522,7 @@ class CustomVoiceRuntime:
         tts_task = asyncio.create_task(self._tts_worker(tts_queue, trace))
         chunker = SentenceChunker()
         response_text = ""
+        self._turn_speech_segments = []
         try:
             # prosody는 별도 system 지시가 아닌 해당 user turn의 제한된 문맥으로만 주입한다.
             self.messages.append({"role": "user", "content": f"{prosody.prompt_hint()}\n{transcript}"})
@@ -384,10 +535,22 @@ class CustomVoiceRuntime:
                     self.messages.append({"role": "assistant", "content": content})
                     break
 
-                # assistant tool-call message와 각 tool 결과를 OpenAI 호환 history 형태로 보존한다.
-                self.messages.append({"role": "assistant", "content": content or None, "tool_calls": tool_calls})
+                # 도구 호출 시 Acoustic Acknowledgment (음성 안내 선행 출력):
+                ack_text = content.strip()
+                if not ack_text:
+                    ack_text = self._get_default_acknowledgment(tool_calls)
+                    if ack_text:
+                        await tts_queue.put(ack_text)
+                        await self._send_json({"type": "assistant_delta", "text": ack_text})
+                        response_text += ack_text
+
+                # assistant tool-call message와 각 tool 결과를 OpenAI 호환 history 형태로 보존
+                self.messages.append({"role": "assistant", "content": ack_text or None, "tool_calls": tool_calls})
+
+                # 2단계 디스패처: 백그라운드 I/O 실행과 선행 음성 안내 TTS를 분리/동시 진행
                 await self._execute_tools(tool_calls, trace)
 
+            self._trim_messages(max_turns=3)
             tail = chunker.flush()
             if tail:
                 await tts_queue.put(tail)
@@ -402,6 +565,8 @@ class CustomVoiceRuntime:
         except asyncio.CancelledError:
             tts_task.cancel()
             await asyncio.gather(tts_task, return_exceptions=True)
+            if response_text.strip():
+                self.messages.append({"role": "assistant", "content": response_text.strip()})
             raise
         except Exception as exc:
             tts_task.cancel()
@@ -472,7 +637,7 @@ class CustomVoiceRuntime:
             self.trace.add_entry("tool_result", result_json, {"tool": name, "call_id": call.get("id")})
 
     async def _tts_worker(self, queue: asyncio.Queue[Optional[str]], trace: TurnTrace) -> None:
-        """문장 queue를 순서대로 합성해 base64 PCM event로 브라우저에 보낸다."""
+        """문장 queue를 순서대로 합성해 TTS 스트림(aiter_bytes)에서 생성되는 즉시 base64 PCM chunk로 브라우저에 보낸다."""
 
         total_audio_ms = 0.0
         while True:
@@ -480,32 +645,47 @@ class CustomVoiceRuntime:
             if text is None:
                 break
             logger.info(
-                "[CustomVoice:%s] TTS request turn=%s chars=%s",
+                "[CustomVoice:%s] TTS stream request turn=%s chars=%s",
                 self.trace.session_id,
                 trace.turn_id,
                 len(text),
             )
-            pcm = await self.providers.synthesize(text)
-            if trace.first_audio_ts is None:
-                trace.first_audio_ts = time.time()
-                logger.info(
-                    "[CustomVoice:%s] TTS first audio turn=%s bytes=%s ttfa_ms=%.1f",
-                    self.trace.session_id,
-                    trace.turn_id,
-                    len(pcm),
-                    (trace.first_audio_ts - (trace.user_speech_end_ts or trace.first_audio_ts)) * 1000.0,
+            start_seg_ms = total_audio_ms
+            seg_audio_ms = 0.0
+
+            async def _iter_tts_chunks():
+                if hasattr(self.providers, "stream_synthesize"):
+                    async for chunk in self.providers.stream_synthesize(text):
+                        yield chunk
+                else:
+                    yield await self.providers.synthesize(text)
+
+            async for pcm_chunk in _iter_tts_chunks():
+                if not pcm_chunk:
+                    continue
+                if trace.first_audio_ts is None:
+                    trace.first_audio_ts = time.time()
+                    logger.info(
+                        "[CustomVoice:%s] TTS first audio chunk turn=%s bytes=%s ttfa_ms=%.1f",
+                        self.trace.session_id,
+                        trace.turn_id,
+                        len(pcm_chunk),
+                        (trace.first_audio_ts - (trace.user_speech_end_ts or trace.first_audio_ts)) * 1000.0,
+                    )
+                    await self._set_state(SessionState.AGENT_SPEAKING)
+                chunk_ms = len(pcm_chunk) / 2 / self.settings.output_sample_rate * 1000.0
+                seg_audio_ms += chunk_ms
+                total_audio_ms += chunk_ms
+                await self._send_json(
+                    {
+                        "type": "audio_chunk",
+                        "audio": base64.b64encode(pcm_chunk).decode("ascii"),
+                        "sample_rate": self.settings.output_sample_rate,
+                        "duration_ms": round(chunk_ms, 1),
+                    }
                 )
-                await self._set_state(SessionState.AGENT_SPEAKING)
-            audio_ms = len(pcm) / 2 / self.settings.output_sample_rate * 1000.0
-            total_audio_ms += audio_ms
-            await self._send_json(
-                {
-                    "type": "audio_chunk",
-                    "audio": base64.b64encode(pcm).decode("ascii"),
-                    "sample_rate": self.settings.output_sample_rate,
-                    "duration_ms": round(audio_ms, 1),
-                }
-            )
+            if seg_audio_ms > 0:
+                self._turn_speech_segments.append((text, start_seg_ms, start_seg_ms + seg_audio_ms))
         trace.agent_audio_duration_ms = total_audio_ms
 
     async def _fail_turn(self, trace: TurnTrace, exc: Exception) -> None:

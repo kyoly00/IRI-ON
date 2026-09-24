@@ -7,6 +7,7 @@ from schemas.user_profile_schema import UserProfileSchema
 from schemas.user_sign_up_schema import UserSignUpSchema
 from schemas.ingredient_id_schema import IngredientIDSchema
 from schemas.tool_id_schema import ToolIDSchema
+from security import hash_password, password_needs_upgrade, verify_password
 
 def get_user_by_login_id(db: Session, login_id: str) -> Optional[User]:
     """로그인 ID(이메일)로 사용자를 조회합니다."""
@@ -20,7 +21,7 @@ def add_user(db: Session, user: UserSignUpSchema) -> User:
 
     db_user = User(
         id=user.id,
-        password=user.password
+        password=hash_password(user.password)
     )
     db.add(db_user)
     db.commit()
@@ -32,8 +33,12 @@ def authenticate_user(db: Session, login_id: str, password: str) -> Optional[Use
     user = get_user_by_login_id(db, login_id)
     if not user:
         return None
-    if user.password != password:
+    if not verify_password(password, user.password):
         return None
+    if password_needs_upgrade(user.password):
+        user.password = hash_password(password)
+        db.commit()
+        db.refresh(user)
     return user
 
 def save_profile(db: Session, user_id: int, user_profile: UserProfileSchema):

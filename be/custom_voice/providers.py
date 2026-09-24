@@ -50,17 +50,20 @@ class OpenAIHttpProviders:
         if self._owns_client:
             await self._client.aclose()
 
-    async def transcribe(self, pcm: bytes) -> str:
+    async def transcribe(self, pcm: bytes, prompt: str | None = None) -> str:
         """16 kHz PCM을 메모리 WAV로 감싼 뒤 일반 transcription API에 보낸다."""
 
         wav_bytes = self._pcm_to_wav(pcm, self.settings.input_sample_rate)
+        data: dict[str, Any] = {
+            "model": self.settings.stt_model,
+            "language": "ko",
+        }
+        if prompt:
+            data["prompt"] = prompt
         response = await self._client.post(
             "/audio/transcriptions",
             files={"file": ("turn.wav", wav_bytes, "audio/wav")},
-            data={
-                "model": self.settings.stt_model,
-                "language": "ko",
-            },
+            data=data,
         )
         if response.status_code >= 400:
             raise ProviderError(f"STT failed ({response.status_code}): {response.text[:300]}")
@@ -96,10 +99,11 @@ class OpenAIHttpProviders:
                 except json.JSONDecodeError as exc:
                     raise ProviderError(f"Invalid LLM SSE frame: {data[:200]}") from exc
 
-    async def synthesize(self, text: str) -> bytes:
-        """문장 조각을 24 kHz mono PCM으로 합성해 그대로 반환한다."""
+    async def stream_synthesize(self, text: str) -> AsyncIterator[bytes]:
+        """TTS API 응답을 aiter_bytes()로 청크 단위 스트리밍하여 생성 즉시 반환한다."""
 
-        response = await self._client.post(
+        async with self._client.stream(
+            "POST",
             "/audio/speech",
             json={
                 "model": self.settings.tts_model,
@@ -108,19 +112,42 @@ class OpenAIHttpProviders:
                 "response_format": "pcm",
                 "speed": 1.0,
             },
-        )
-        if response.status_code >= 400:
-            raise ProviderError(f"TTS failed ({response.status_code}): {response.text[:300]}")
-        content_type = response.headers.get("content-type", "").lower()
-        # 일부 호환 서버는 HTTP 200으로 JSON 오류를 반환한다. 이를 PCM으로 재생하면
-        # 잡음만 나므로 body와 content type을 runtime에 넘기기 전에 함께 검증한다.
-        if "json" in content_type or content_type.startswith("text/"):
-            raise ProviderError(f"TTS returned non-audio content ({content_type or 'unknown'}): {response.text[:300]}")
-        pcm = response.content
+        ) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                raise ProviderError(f"TTS failed ({response.status_code}): {body[:300]!r}")
+            content_type = response.headers.get("content-type", "").lower()
+            if "json" in content_type or content_type.startswith("text/"):
+                body = await response.aread()
+                raise ProviderError(f"TTS returned non-audio content ({content_type or 'unknown'}): {body[:300]!r}")
+
+            remainder = b""
+            # 24kHz 16-bit mono PCM: 1초 = 48,000 bytes.
+            # 2,400 bytes = 약 50ms 오디오 청크 단위로 즉시 스트리밍
+            async for chunk in response.aiter_bytes(chunk_size=2400):
+                if not chunk:
+                    continue
+                data = remainder + chunk
+                # 16-bit (2-byte) sample alignment 유지
+                if len(data) % 2 != 0:
+                    remainder = data[-1:]
+                    data = data[:-1]
+                else:
+                    remainder = b""
+                if data:
+                    yield data
+            if remainder:
+                yield remainder + b"\x00"
+
+    async def synthesize(self, text: str) -> bytes:
+        """문장 조각을 24 kHz mono PCM으로 합성해 그대로 반환한다."""
+
+        chunks: list[bytes] = []
+        async for chunk in self.stream_synthesize(text):
+            chunks.append(chunk)
+        pcm = b"".join(chunks)
         if not pcm:
             raise ProviderError("TTS returned an empty PCM response")
-        if len(pcm) % 2:
-            raise ProviderError(f"TTS returned invalid 16-bit PCM length: {len(pcm)} bytes")
         return pcm
 
     @staticmethod

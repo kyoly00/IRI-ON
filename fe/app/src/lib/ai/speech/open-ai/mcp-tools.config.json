@@ -56,6 +56,36 @@
           "action"
         ]
       }
+    },
+    {
+      "type": "function",
+      "name": "control_video",
+      "description": "요리 영상 재생, 일시정지, 특정 시간 이동, 이전/다음 몇 초 이동을 조작합니다. 정지 요청 시 사용자 발화 시점을 고려해 정지합니다.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "pause",
+              "play",
+              "seek"
+            ],
+            "description": "동작: 영상 일시정지('pause'), 영상 재생('play'), 시간 이동('seek')"
+          },
+          "target_seconds": {
+            "type": "number",
+            "description": "이동할 영상 절대 시간(초). 예: 1분 20초면 80"
+          },
+          "offset_seconds": {
+            "type": "number",
+            "description": "현재 위치 기준 상대 이동 시간(초). 예: 10초 전이면 -10, 30초 뒤면 +30"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
     }
   ],
   "mcpTools": [

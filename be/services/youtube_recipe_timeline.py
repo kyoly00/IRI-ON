@@ -362,7 +362,12 @@ def split_transcript_with_llm(
 타임스탬프 자막:
 {transcript_text}"""
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # 외부 LLM이 지연되거나 일시적으로 실패해도 요청이 무한정 대기하지 않도록 제한한다.
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        timeout=float(os.getenv("RECIPE_TIMELINE_TIMEOUT_SECONDS", "30")),
+        max_retries=int(os.getenv("RECIPE_TIMELINE_MAX_RETRIES", "1")),
+    )
     response = client.chat.completions.create(
         model=model or os.getenv("RECIPE_TIMELINE_MODEL", "gpt-5-nano"),
         messages=[

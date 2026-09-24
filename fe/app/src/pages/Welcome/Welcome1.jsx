@@ -20,6 +20,12 @@ export default function Welcome1() {
       return;
     }
 
+    // 서버 요청 전에 비밀번호 정책을 안내해 검증 오류(422) 대신 즉시 수정할 수 있게 한다.
+    if (password.length < 8 || password.length > 20) {
+      alert("비밀번호는 8~20자로 입력해 주세요.");
+      return;
+    }
+
     if (isSignUp && password !== passwordConfirm) {
       alert("비밀번호 확인이 일치하지 않습니다.");
       return;
@@ -40,6 +46,7 @@ export default function Welcome1() {
       if (res.ok && data?.user_id != null) {
         // ✅ user_id 저장
         localStorage.setItem("user_id", String(data.user_id));
+        if (data.access_token) localStorage.setItem("access_token", data.access_token);
         
         if (isSignUp) {
           alert("회원가입이 완료되었습니다! 맞춤 프로필을 설정해주세요.");
@@ -94,6 +101,8 @@ export default function Welcome1() {
             placeholder="비밀번호를 입력하세요."
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            maxLength={20}
             autoComplete={isSignUp ? "new-password" : "current-password"}
             required
           />
@@ -107,6 +116,8 @@ export default function Welcome1() {
               placeholder="비밀번호를 다시 입력하세요."
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
+              minLength={8}
+              maxLength={20}
               autoComplete="new-password"
               required
             />

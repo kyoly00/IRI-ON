@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Welcome2.css";
 import baby from "../../assets/baby.png";
-import { api } from "../../lib/api";
+import { api, authFetch } from "../../lib/api";
 
 export default function Welcome2() {
   const nav = useNavigate();
@@ -95,8 +95,8 @@ export default function Welcome2() {
         allergy: allergies.join(","),
       };
 
-      const res1 = await fetch(
-        api(`/users/profile?user_id=${userId}`),
+      const res1 = await authFetch(
+        `/users/profile`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -108,8 +108,8 @@ export default function Welcome2() {
       // 2) 선택 도구 저장
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
 
-      const res2 = await fetch(
-        api(`/users/tools?user_id=${userId}`),
+      const res2 = await authFetch(
+        `/users/tools`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

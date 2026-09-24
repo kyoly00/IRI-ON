@@ -25,6 +25,8 @@ export type UIMessageWithCompleted = {
  *  - session_info  : 시스템 프롬프트/재료/타이머 설정 전달
  *  - video/timer   : 로컬 부가 기능 (영상 URL, 타이머 완료)
  *  - step_detected : N 단계 진입 안내
+ *  - navigate_step : 다음/이전/지정 단계 이동
+ *  - video_control : 영상 정지/재생/시간 이동
  */
 export type AssistantBridgeEvent =
   | {
@@ -50,6 +52,13 @@ export type AssistantBridgeEvent =
     type: "navigate_step";
     action: "next" | "prev" | "set";
     targetStep?: number;
+  }
+  | {
+    type: "video_control";
+    action: "pause" | "play" | "seek";
+    targetSeconds?: number;
+    offsetSeconds?: number;
+    rollbackSeconds?: number;
   }
   | {
     // catch-all (ACK 등)
@@ -83,8 +92,14 @@ export type VoiceChatOptions = {
   instructions?: string;
   onAssistantEvent?: (event: AssistantBridgeEvent) => void;
   mcpServerUrl?: string;
-  userId?: number; // 추가: 사용자 ID
-  recipeId?: number; // 추가: 레시피 ID
+  userId?: number; // 사용자 ID
+  recipeId?: number; // 레시피 ID
+  currentStep?: number; // 현재 요리 단계 인덱스 (0-indexed)
+  stepContext?: {
+    step?: number;
+    text?: string;
+    duration?: number;
+  };
 };
 
 export type VoiceChatHook = (props?: {

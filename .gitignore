@@ -1,20 +1,109 @@
-# 환경변수 파일
-be/.env
-fe/app/.env
+# ==============================================================================
+# 1. 보안 & 환경 변수 (Secrets & Credentials - 절대 Git 커밋 금지)
+# ==============================================================================
+# 모든 환경변수 및 시크릿 설정 파일 (.env, .env.local, .env.production 등)
+.env
+**/.env
+*.env
+.env.*
+!.env.example
+!**/.env.example
 
-# 데이터 폴더
-be/data/
+# SSL/TLS 인증서, 개인키 및 SSH 키 파일
+*.pem
+*.key
+*.crt
+*.pfx
 
-# 로그 폴더
-be/conversation_logs/
-be/evaluation_results/
+# 로컬 Docker Compose 오버라이드 설정
+docker-compose.override.yml
 
-# md 파일
-*.md
-be/custom_voice/README.md
 
-# Python cache files
+# ==============================================================================
+# 2. 데이터베이스 & 덤프 파일 (Database & Data Dumps)
+# ==============================================================================
+# SQL 쿼리 덤프 및 백업 파일 (민감 데이터 유출 방지)
+*.sql
+*.dump
+
+
+# ==============================================================================
+# 3. Python 실행 환경 & 바이트코드 캐시 (Python Runtime & Cache)
+# ==============================================================================
+# 바이트코드 및 컴파일 파일
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
 *.pyo
 *.pyd
+
+# 테스트, 커버리지 및 린터 캐시
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# 가상환경 (Virtual Environments)
+.venv/
+venv/
+ENV/
+env/
+
+
+# ==============================================================================
+# 4. 데이터, AI 모델 바이너리 & 대화 로그 (Data, Models & Logs)
+# ==============================================================================
+# 로컬 식재료/레시피 데이터 디렉터리 및 테이블 데이터
+be/data/
+*.csv
+
+# 음성/AI 대용량 모델 가중치 파일 (ONNX 등)
+*.onnx
+
+# 실제 사용자 음성 대화 로그 및 평가 분석 결과 파일
+be/conversation_logs/
+be/evaluation_results/
+
+
+# ==============================================================================
+# 5. OS 및 IDE 개발 환경 (Operating System & IDEs)
+# ==============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# JetBrains (PyCharm, IntelliJ, etc.) & 에디터 백업
+.idea/
+*.swp
+*.bak
+
+# VS Code (팀 권장 확장 설정인 extensions.json은 보존)
+.vscode/
+!.vscode/extensions.json
+
+
+# ==============================================================================
+# 6. 프로젝트별 특정 설정 및 임시 파일 (Project Specifics)
+# ==============================================================================
+# 내부 테스트 및 스크립트 폴더
+be/tests/
+
+# DB 마이그레이션 (로컬 Alembic 환경)
+be/alembic/
+be/alembic.*
+
+# 내부 참고용 문서
+be/custom_voice/README.md
+docs/
+
+# 의존성 및 패키지 텍스트 파일
+requirements-*.txt
+be/**/*.txt
+fe/**/*.txt

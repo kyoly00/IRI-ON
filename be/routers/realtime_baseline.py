@@ -88,8 +88,17 @@ user_profile = {
 
 
 # OpenAI 클라이언트 초기화 
-openai_client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)  # LLM(GPT)용 비동기 클라이언트
-sync_openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)  # STT 및 일반 통신을 위한 동기 클라이언트
+# 레거시 음성 기능도 외부 API 지연으로 서버 작업이 고착되지 않도록 시간과 재시도를 제한한다.
+openai_client = openai.AsyncOpenAI(
+    api_key=OPENAI_API_KEY,
+    timeout=float(os.getenv("LEGACY_EXTERNAL_API_TIMEOUT_SECONDS", "30")),
+    max_retries=1,
+)
+sync_openai_client = openai.OpenAI(
+    api_key=OPENAI_API_KEY,
+    timeout=float(os.getenv("LEGACY_EXTERNAL_API_TIMEOUT_SECONDS", "30")),
+    max_retries=1,
+)
 
 
 # --- 시스템 프롬프트 ---
@@ -449,7 +458,13 @@ def tts_skt(text):
 
         print(f"⏳ [TTS 요청 시작] SKT axtts-2-6 API로 텍스트 분할 전송 중... (청크 {idx}/{len(text_chunks)})", end=" ", flush=True)
         tts_start = time.perf_counter()
-        response = requests.post(url, json=payload, headers=headers)
+        # 외부 TTS 호출이 장애 상태일 때 음성 처리 스레드를 오래 점유하지 않도록 제한한다.
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=float(os.getenv("LEGACY_EXTERNAL_API_TIMEOUT_SECONDS", "30")),
+        )
         tts_end = time.perf_counter()
         tts_latency = tts_end - tts_start
 

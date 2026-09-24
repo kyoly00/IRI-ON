@@ -156,6 +156,20 @@ async def cook_assistant_ws(
 
     await websocket.accept()
 
+    # 2단계 인증 프로토콜
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        auth_msg = json.loads(raw_auth)
+        if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+            await websocket.close(code=4401, reason="Unauthorized: Missing or invalid auth frame")
+            return
+        from security import verify_ws_token
+        verify_ws_token(str(auth_msg["token"]), expected_user_id=user_id)
+        await websocket.send_json({"type": "auth_success"})
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        await websocket.close(code=4401, reason=f"Unauthorized: {exc}")
+        return
+
     try:
         # Create new Gemini connection for this client
         gemini = GeminiConnection()

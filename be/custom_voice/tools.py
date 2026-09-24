@@ -14,6 +14,32 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "control_video",
+            "description": "요리 영상 재생, 일시정지, 특정 시간 이동, 이전/다음 몇 초 이동을 조작한다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["pause", "play", "seek"],
+                        "description": "pause: 영상 일시정지(발화 시점 기준), play: 영상 재생, seek: 시간 이동",
+                    },
+                    "target_seconds": {
+                        "type": "number",
+                        "description": "이동할 영상 절대 시간(초). 예: 1분 20초면 80",
+                    },
+                    "offset_seconds": {
+                        "type": "number",
+                        "description": "현재 위치 기준 상대 이동 시간(초). 예: 10초 전이면 -10, 30초 뒤면 +30",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "navigate_cooking_step",
             "description": "요리 화면을 다음, 이전 또는 지정 단계로 이동한다.",
             "parameters": {
@@ -142,7 +168,28 @@ class ToolExecutor:
 
         started = time.perf_counter()
         try:
-            if name == "navigate_cooking_step":
+            if name == "control_video":
+                action = str(arguments.get("action", "pause")).lower()
+                if action not in {"pause", "play", "seek"}:
+                    raise ValueError("action must be pause, play, or seek")
+                event: dict[str, Any] = {"type": "video_control", "action": action}
+                target_seconds = arguments.get("target_seconds")
+                if target_seconds is not None:
+                    try:
+                        event["targetSeconds"] = float(target_seconds)
+                    except (TypeError, ValueError):
+                        pass
+                offset_seconds = arguments.get("offset_seconds")
+                if offset_seconds is not None:
+                    try:
+                        event["offsetSeconds"] = float(offset_seconds)
+                    except (TypeError, ValueError):
+                        pass
+                # 사용자 발화 시점 기준 지연 보정값(초)
+                event["rollbackSeconds"] = 1.5
+                await self._send_event({"type": "assistant_event", "event": event})
+                result = {"success": True, "action": action, **{k: v for k, v in event.items() if k != "type"}}
+            elif name == "navigate_cooking_step":
                 action = str(arguments.get("action", "next"))
                 if action not in {"next", "prev", "set"}:
                     raise ValueError("action must be next, prev, or set")

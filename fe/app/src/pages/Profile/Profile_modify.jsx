@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Profile_modify.css";
 import baby from "../../assets/baby.png";
-import { api } from "../../lib/api";
+import { api, authFetch } from "../../lib/api";
 
 // 레벨 이미지
 import Lv1 from "../../assets/Level/Lv1.png";
@@ -109,7 +109,7 @@ export default function ProfileModify() {
         if (resTools.ok) setToolsList(await resTools.json());
 
         if (userId) {
-          const resProfile = await fetch(api(`/users/profile?user_id=${userId}`)
+          const resProfile = await authFetch(`/users/profile`
           );
           if (resProfile.ok) {
             const p = await resProfile.json();
@@ -127,8 +127,8 @@ export default function ProfileModify() {
             setAllergies(parsed);
           }
 
-          const resMyTools = await fetch(
-            api(`/users/tools?user_id=${userId}`)
+          const resMyTools = await authFetch(
+            `/users/tools`
           );
           if (resMyTools.ok) {
             const my = await resMyTools.json();
@@ -158,8 +158,8 @@ export default function ProfileModify() {
         ...tools,
         allergy: allergies.join(","),
       };
-      const res1 = await fetch(
-        api(`/users/profile?user_id=${userId}`),
+      const res1 = await authFetch(
+        `/users/profile`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -169,8 +169,8 @@ export default function ProfileModify() {
       if (!res1.ok) throw new Error("프로필 저장 실패");
 
       const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
-      const res2 = await fetch(
-        api(`/users/tools?user_id=${userId}`),
+      const res2 = await authFetch(
+        `/users/tools`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

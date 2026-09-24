@@ -33,6 +33,11 @@ class CustomVoiceSettings:
     vad_noise_multiplier: float = 2.8
     vad_min_rms: float = 850.0
 
+    # ML 기반 Silero VAD 설정 (silero | energy)
+    vad_mode: str = "silero"
+    vad_threshold: float = 0.5
+    vad_model_path: str | None = None
+
     # endpoint까지 모은 발화 전체의 정규화 RMS가 이보다 작으면 STT에 보내지 않는다.
     # 에너지 VAD를 간신히 통과한 지속 잡음과 무음 기반 STT hallucination을 이중 차단한다.
     minimum_utterance_rms: float = 0.025
@@ -87,6 +92,9 @@ class CustomVoiceSettings:
             output_sample_rate=int(os.getenv("CUSTOM_VOICE_OUTPUT_RATE", "24000")),
             endpoint_silence_ms=int(os.getenv("CUSTOM_VOICE_ENDPOINT_MS", "720")),
             speech_start_frames=int(os.getenv("CUSTOM_VOICE_SPEECH_START_FRAMES", "5")),
+            vad_mode=os.getenv("CUSTOM_VOICE_VAD_MODE", "silero").strip().lower(),
+            vad_threshold=float(os.getenv("CUSTOM_VOICE_VAD_THRESHOLD", "0.5")),
+            vad_model_path=os.getenv("CUSTOM_VOICE_VAD_MODEL_PATH") or None,
             vad_noise_multiplier=float(os.getenv("CUSTOM_VOICE_VAD_MULTIPLIER", "2.8")),
             vad_min_rms=float(os.getenv("CUSTOM_VOICE_VAD_MIN_RMS", "850")),
             minimum_utterance_rms=float(os.getenv("CUSTOM_VOICE_MIN_UTTERANCE_RMS", "0.025")),

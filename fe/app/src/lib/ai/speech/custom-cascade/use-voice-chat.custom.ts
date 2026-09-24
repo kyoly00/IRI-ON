@@ -162,11 +162,22 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const silentGainRef = useRef<GainNode | null>(null);
   const playbackSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const playbackChunksRef = useRef<{ source: AudioBufferSourceNode; startAt: number; duration: number }[]>([]);
   const nextPlaybackTimeRef = useRef(0);
   const currentUserMessageIdRef = useRef<string | null>(null);
   const currentAssistantMessageIdRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopRef = useRef<() => Promise<void>>(async () => undefined);
+
+  const messagesRef = useRef<UIMessageWithCompleted[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const propsRef = useRef(props);
+  useEffect(() => {
+    propsRef.current = props;
+  }, [props]);
 
   const userId = props?.userId ?? 2;
   const recipeId = props?.recipeId ?? 42;
@@ -191,8 +202,20 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
     };
   }, [userId, recipeId]);
 
-  /** 진행/예약된 모든 TTS source를 즉시 멈춰 barge-in 지연을 최소화한다. */
+  /** 진행/예약된 모든 TTS source를 즉시 멈추고 실제 청취 시간을 역송신하여 State Rollback을 수행한다. */
   const stopPlayback = useCallback(() => {
+    const context = audioContextRef.current;
+    const now = context?.currentTime ?? 0;
+
+    let totalPlayedSec = 0;
+    for (const chunk of playbackChunksRef.current) {
+      if (now > chunk.startAt) {
+        const played = Math.min(chunk.duration, now - chunk.startAt);
+        totalPlayedSec += Math.max(0, played);
+      }
+    }
+    const playedMs = Math.round(totalPlayedSec * 1000);
+
     playbackSourcesRef.current.forEach((source) => {
       try {
         source.stop();
@@ -201,8 +224,19 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
       }
     });
     playbackSourcesRef.current.clear();
-    nextPlaybackTimeRef.current = audioContextRef.current?.currentTime ?? 0;
+    playbackChunksRef.current = [];
+    nextPlaybackTimeRef.current = now;
     setIsAssistantSpeaking(false);
+
+    if (playedMs > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({
+          type: "playback_progress",
+          played_duration_ms: playedMs,
+          interrupted: true,
+        })
+      );
+    }
   }, []);
 
   /** 서버가 보낸 raw PCM을 AudioBufferSource로 이어 붙여 gap 없는 재생 queue를 만든다. */
@@ -222,10 +256,14 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
     const startAt = Math.max(context.currentTime + 0.03, nextPlaybackTimeRef.current);
     nextPlaybackTimeRef.current = startAt + buffer.duration;
     playbackSourcesRef.current.add(source);
+    playbackChunksRef.current.push({ source, startAt, duration: buffer.duration });
     setIsAssistantSpeaking(true);
     source.onended = () => {
       playbackSourcesRef.current.delete(source);
-      if (playbackSourcesRef.current.size === 0) setIsAssistantSpeaking(false);
+      if (playbackSourcesRef.current.size === 0) {
+        setIsAssistantSpeaking(false);
+        playbackChunksRef.current = [];
+      }
     };
     source.start(startAt);
   }, []);
@@ -233,13 +271,28 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
   /** 서버 event를 기존 화면의 message/event 상태 계약으로 변환한다. */
   const handleServerEvent = useCallback((event: CustomVoiceEvent) => {
     switch (event.type) {
-      case "session_ready":
+      case "session_ready": {
         setIsActive(true);
         setIsListening(true);
         setIsLoading(false);
-        socketRef.current?.send(JSON.stringify({ type: "generate_greeting" }));
+        const currentStep = propsRef.current?.currentStep ?? 0;
+        const stepText = propsRef.current?.stepContext?.text ?? "";
+        const recentHistory = messagesRef.current.slice(-6).map((m) => ({
+          role: m.role,
+          text: (m.parts[0] as any)?.text || "",
+        })).filter((m) => m.text);
+
+        socketRef.current?.send(JSON.stringify({
+          type: "resume_session",
+          current_step: currentStep,
+          step_text: stepText,
+          history: recentHistory,
+        }));
         break;
+      }
       case "user_speech_started": {
+        // VAD 발화 감지 시 에이전트 음성을 즉시 중단한다 (Barge-in)
+        stopPlayback();
         const id = createBrowserUUID();
         currentUserMessageIdRef.current = id;
         setIsUserSpeaking(true);
@@ -440,6 +493,10 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
       );
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
+      socket.onopen = () => {
+        const token = localStorage.getItem("access_token") || "";
+        socket.send(JSON.stringify({ type: "auth", token }));
+      };
       socket.onmessage = (message) => {
         try {
           handleServerEvent(JSON.parse(String(message.data)));

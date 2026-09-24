@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Menu.css";
 import { FaSearch, FaClock } from "react-icons/fa";
-import { api } from "../../lib/api";
+import { api, authFetch } from "../../lib/api";
 
 const categories = ["전체", "한식", "중식", "일식", "양식", "간식", "기타"];
 
@@ -21,6 +21,7 @@ export default function Menu() {
   const [maxSteps, setMaxSteps] = useState("");
   const [youtubeImporting, setYoutubeImporting] = useState(false);
   const [youtubeMessage, setYoutubeMessage] = useState("");
+  const [youtubeOpen, setYoutubeOpen] = useState(false);
   const navigate = useNavigate();
 
   // ✅ 메뉴 불러오기
@@ -33,15 +34,14 @@ export default function Menu() {
         url = api('/recipes/');
       } else {
         // TODO: 로그인 후 실제 user_id로 교체
-        const userId = localStorage.getItem("user_id") || 1;
-        url = api(`/recipes/recommendations/${userId}`);
+        url = api("/recipes/recommendations");
       }
 
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (category !== "전체") params.append("category", category);
 
-      const res = await fetch(`${url}?${params.toString()}`);
+      const res = mode === "맞춤" ? await authFetch(`${url}?${params.toString()}`) : await fetch(`${url}?${params.toString()}`);
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
       const data = await res.json();
       setMenuList(data);
@@ -55,26 +55,26 @@ export default function Menu() {
 
   // 처음 전체 메뉴 불러오기
   useEffect(() => {
-    fetchMenus("전체");
-  }, []);
+    const timer = window.setTimeout(() => {
+      fetchMenus(viewMode, searchTerm, selectedCategory);
+    }, searchTerm ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [viewMode, searchTerm, selectedCategory]);
 
   // ✅ 보기 모드 변경
   const handleViewModeChange = (mode) => {
     setViewMode(mode);
-    fetchMenus(mode, searchTerm, selectedCategory);
   };
 
   // ✅ 검색 이벤트
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    fetchMenus(viewMode, value, selectedCategory);
   };
 
   // ✅ 카테고리 선택
   const handleCategoryChange = (cat) => {
     setSelectedCategory(cat);
-    fetchMenus(viewMode, searchTerm, cat);
   };
 
   // ✅ 요리 시작 버튼
@@ -98,7 +98,7 @@ export default function Menu() {
     setYoutubeImporting(true);
     setYoutubeMessage("");
     try {
-      const response = await fetch(api("/recipes/import-youtube"), {
+      const response = await authFetch("/recipes/import-youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -158,6 +158,15 @@ export default function Menu() {
       <section className="youtube-import-card" aria-label="YouTube 영상 레시피 등록">
         <h3>YouTube 링크로 바로 요리하기</h3>
         <p>자막과 조리 단계를 검증한 뒤 레시피를 만들고 음성 보조 화면으로 이동해요.</p>
+        <button
+          type="button"
+          className="youtube-import-toggle"
+          onClick={() => setYoutubeOpen((open) => !open)}
+          aria-expanded={youtubeOpen}
+        >
+          {youtubeOpen ? "YouTube 검색 닫기" : "YouTube 검색 열기"}
+        </button>
+        {youtubeOpen && (
         <form onSubmit={handleYouTubeImport}>
           <input
             type="url"
@@ -184,6 +193,7 @@ export default function Menu() {
           </details>
           <button type="submit" disabled={youtubeImporting}>{youtubeImporting ? "자막·단계 검증 중…" : "영상으로 레시피 만들기"}</button>
         </form>
+        )}
         {youtubeMessage && <p className="youtube-import-message">{youtubeMessage}</p>}
       </section>
 

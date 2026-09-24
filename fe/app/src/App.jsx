@@ -1,6 +1,6 @@
 
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import Home from "./pages/Home/Home.jsx";
 import Menu from "./pages/Menu/Menu.jsx";
@@ -18,6 +18,15 @@ import RecipeCheck from "./pages/RecipeCheck/RecipeCheck.jsx";
 
 import "./index.css";
 
+function RequireAuth() {
+  const location = useLocation();
+
+  if (!localStorage.getItem("access_token")) {
+    return <Navigate to="/welcome1" replace state={{ from: location.pathname }} />;
+  }
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -30,19 +39,21 @@ export default function App() {
             <Route path="/welcome2" element={<Welcome2 />} />
 
             {/* 하단바 있는 페이지 */}
+            <Route element={<RequireAuth />}>
             <Route element={<MainLayout />}>
               <Route path="/home" element={<Home />} />
               <Route path="/menu" element={<Menu />} />
               <Route path="/fridge" element={<Fridge />} />
               <Route path="/community" element={<Community />} />   {/* ✅ 추가 */}
               <Route path="/profile" element={<ProfileModify />} /> {/* ✅ 추가 */}
-              <Route path="/personal" element={<Personal />} />
+            <Route path="/personal" element={<Personal />} />
             </Route>
 
             {/* 하단바 없는 독립 페이지 */}
             <Route path="/fridgecomplete" element={<FridgeComplete />} />
             <Route path="/CookingExplain/:id" element={<CookingExplain />} />
             <Route path="/recipes/:id/check" element={<RecipeCheck />} />
+            </Route>
 
             {/* 잘못된 경로 처리 */}
             <Route path="*" element={<Navigate to="/" replace />} />
