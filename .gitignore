@@ -87,7 +87,7 @@ ehthumbs.db
 # VS Code (팀 권장 확장 설정인 extensions.json은 보존)
 .vscode/
 !.vscode/extensions.json
-
+.agents
 
 # ==============================================================================
 # 6. 프로젝트별 특정 설정 및 임시 파일 (Project Specifics)
