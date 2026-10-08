@@ -101,7 +101,6 @@ export default function Menu() {
       const response = await authFetch("/recipes/import-youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           video_url: videoUrl,
           name: youtubeName.trim() || undefined,

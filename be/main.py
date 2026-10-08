@@ -28,7 +28,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(debug=os.getenv("ENVIRONMENT", "development") != "production", lifespan=lifespan)
-# 쉼표로 구분된 허용 목록만 사용해 임의의 브라우저 Origin 접근을 막습니다.
+# 브라우저 인증은 쿠키가 아닌 Authorization Bearer 토큰을 사용합니다.
+# 따라서 credential cookie는 허용하지 않고, 쉼표로 구분된 Origin만 접근시킵니다.
 origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if item.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])

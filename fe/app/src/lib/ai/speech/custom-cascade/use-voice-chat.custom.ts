@@ -186,7 +186,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
   useEffect(() => {
     let cancelled = false;
     setSessionInfo(null);
-    fetch(api(`/custom-voice/session-info/${userId}/${recipeId}`), { credentials: "include" })
+    fetch(api(`/custom-voice/session-info/${userId}/${recipeId}`))
       .then(async (response) => {
         if (!response.ok) throw new Error(await response.text());
         return response.json();

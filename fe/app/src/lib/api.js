@@ -38,7 +38,7 @@ export function authFetch(path, init = {}) {
  * 간단한 GET 래퍼. 인증 쿠키 포함(fetch default 옵션 통일 목적).
  */
 export async function get(path, init) {
-  const r = await authFetch(path, { ...(init || {}), credentials: "include" });
+  const r = await authFetch(path, init || {});
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
@@ -53,7 +53,6 @@ export async function post(path, body, init) {
       "Content-Type": "application/json",
       ...((init && init.headers) || {}),
     },
-    credentials: "include",
     body: JSON.stringify(body),
     ...(init || {}),
   });

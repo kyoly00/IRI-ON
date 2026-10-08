@@ -46,7 +46,7 @@ export default function CookingExplain() {
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(api(`/recipes/${recipeId}`), { credentials: "include" })
+    fetch(api(`/recipes/${recipeId}`))
       .then(async (response) => {
         if (!response.ok) throw new Error("레시피를 불러오지 못했어요.");
         return response.json();
@@ -184,7 +184,6 @@ export default function CookingExplain() {
     try {
       const response = await fetch(api(`/recipes/${recipe.recipe_id}/timeline`), {
         method: "POST",
-        credentials: "include",
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "영상 구간을 만들지 못했어요.");

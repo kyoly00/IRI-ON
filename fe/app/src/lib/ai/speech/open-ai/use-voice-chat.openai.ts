@@ -338,9 +338,7 @@ export function useOpenAIVoiceChat(
     try {
       // api() 함수 사용으로 통일
       const query = props?.currentStep != null ? `?current_step=${props.currentStep}` : "";
-      const response = await fetch(api(`/assistant/session-info/${userId}/${recipeId}${query}`), {
-        credentials: 'include',
-      });
+      const response = await fetch(api(`/assistant/session-info/${userId}/${recipeId}${query}`));
       if (!response.ok) {
         throw new Error("Failed to fetch session info");
       }
