@@ -16,4 +16,4 @@ class Tool(Base):
     tool_id = Column(BIGINT, primary_key=True, autoincrement=True, index=True)
 
     name = Column(String(100), nullable=False)
-    category = Column(Enum(Category), nullable=False)
+    category = Column(Enum(Category, name="tool_category_enum"), nullable=False)

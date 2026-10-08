@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from models.recipe.recipe import Recipe
 from models.recipe.recipe_ingredient import RecipeIngredient
@@ -133,13 +133,17 @@ def get_recommended_recipes(db: Session, ingredients: List[IngredientIDSchema], 
         .group_by(Recipe.recipe_id)
         .having(
             func.count(RecipeIngredient.ingredient_id) ==
-            func.count(func.if_(RecipeIngredient.ingredient_id.in_(ingredient_ids), 1, None))
+            func.count(
+                case((RecipeIngredient.ingredient_id.in_(ingredient_ids), 1))
+            )
         )
     )
 
     recipes = recipes.join(RecipeTool, Recipe.recipe_id == RecipeTool.recipe_id).group_by(Recipe.recipe_id).having(
         func.count(RecipeTool.tool_id) ==
-        func.count(func.if_(RecipeTool.tool_id.in_(tool_ids), 1, None))
+        func.count(
+            case((RecipeTool.tool_id.in_(tool_ids), 1))
+        )
     )
 
     return recipes.all()
