@@ -9,6 +9,7 @@ google-genai==1.30.0
 numpy==2.2.2
 openai==1.99.9
 filetype==1.2.0
+Pillow==11.1.0
 pymysql==1.1.1
 requests==2.32.4
 sqlalchemy==2.0.41
