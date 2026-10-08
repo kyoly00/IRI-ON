@@ -2,7 +2,7 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Personal.css";
 import topLogo from "../../assets/top_logo.png";
-import totalFood from "../../assets/community/total_food.png"; // ✅ 한 장 이미지
+import totalFood from "../../assets/Community/total_food.png"; // ✅ 한 장 이미지
 import { FiChevronLeft } from "react-icons/fi";
 
 export default function Personal() {

@@ -4,9 +4,9 @@ import "./Community.css";
 import topLogo from "../../assets/top_logo.png";
 
 // ✅ 로컬 이미지
-import food1 from "../../assets/community/food1.png";
-import food2 from "../../assets/community/food2.png";
-import food3 from "../../assets/community/food3.png";
+import food1 from "../../assets/Community/food1.png";
+import food2 from "../../assets/Community/food2.png";
+import food3 from "../../assets/Community/food3.png";
 
 import {
   FiSearch,
