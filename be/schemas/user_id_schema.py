@@ -1,7 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class UserIDSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     user_id: int
-
-    class Config:
-        orm_mode = True  # ORM 객체도 자동 변환 가능

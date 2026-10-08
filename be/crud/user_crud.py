@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from models.user import User
@@ -45,11 +46,38 @@ def save_profile(db: Session, user_id: int, user_profile: UserProfileSchema):
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if db_user:
         db_user.name = user_profile.name
-        db_user.can_use_fire = user_profile.can_use_fire
-        db_user.can_use_knife = user_profile.can_use_knife
-        db_user.can_use_peeler = user_profile.can_use_peeler
-        db_user.can_use_scissors = user_profile.can_use_scissors
-        db_user.allergy = user_profile.allergy
+        db_user.cooking_level = user_profile.cooking_level
+        db_user.age_group = (
+            None
+            if user_profile.age_group == "unspecified"
+            else user_profile.age_group
+        )
+        db_user.supervision_level = user_profile.supervision_level
+        db_user.fire_skill = user_profile.fire_skill
+        db_user.knife_skill = user_profile.knife_skill
+        db_user.peeler_skill = user_profile.peeler_skill
+        db_user.scissors_skill = user_profile.scissors_skill
+        db_user.can_use_fire = user_profile.fire_skill == "independent"
+        db_user.can_use_knife = user_profile.knife_skill == "independent"
+        db_user.can_use_peeler = user_profile.peeler_skill == "independent"
+        db_user.can_use_scissors = user_profile.scissors_skill == "independent"
+        if (
+            user_profile.avatar_type == "preset"
+            and user_profile.avatar_value in {"baby1", "baby2", "baby3", "baby4"}
+        ):
+            db_user.avatar_type = "preset"
+            db_user.avatar_value = user_profile.avatar_value
+        db_user.photo_consent_confirmed = user_profile.photo_consent_confirmed
+        db_user.allergy_status = user_profile.allergy_status
+        db_user.allergy = json.dumps(user_profile.allergies, ensure_ascii=False)
+        db_user.dietary_restrictions = json.dumps(
+            user_profile.dietary_restrictions,
+            ensure_ascii=False,
+        )
+        db_user.disliked_ingredients = json.dumps(
+            user_profile.disliked_ingredients,
+            ensure_ascii=False,
+        )
         db.commit()
         db.refresh(db_user)
     return db_user
@@ -82,23 +110,16 @@ def get_user_ingredients_ids(db: Session, user_id: int) -> List[IngredientIDSche
     return db.query(UserIngredient.ingredient_id).filter(UserIngredient.user_id == user_id).all()
 
 def save_tools(db: Session, user_id: int, tools_ids: List[ToolIDSchema]):
-    # 이미 사용자가 가진 도구 ID 조회
-    existing_ids = {
-        tool.tool_id
-        for tool in db.query(UserTool.tool_id)
-                     .filter(UserTool.user_id == user_id)
-                     .all()
-    }
+    """보유 도구 목록을 현재 선택값으로 교체합니다."""
+    requested_ids = {tool.tool_id for tool in tools_ids}
+    existing = db.query(UserTool).filter(UserTool.user_id == user_id).all()
+    existing_ids = {tool.tool_id for tool in existing}
 
-    for tool in tools_ids:
-        if tool.tool_id in existing_ids:
-            continue  # 이미 있으면 추가하지 않음
-
-        db_tool = UserTool(
-            user_id=user_id,
-            tool_id=tool.tool_id
-        )
-        db.add(db_tool)
+    for tool in existing:
+        if tool.tool_id not in requested_ids:
+            db.delete(tool)
+    for tool_id in requested_ids - existing_ids:
+        db.add(UserTool(user_id=user_id, tool_id=tool_id))
     db.commit()
 
 def get_user_tools_ids(db: Session, user_id: int) -> List[ToolIDSchema]:

@@ -11,6 +11,7 @@ class UserLoginSchema(BaseModel):
 
 class UserLoginResponseSchema(BaseModel):
     """로그인 응답 스키마."""
+    model_config = ConfigDict(from_attributes=True)
     user_id: int
     id: str
     name: Optional[str] = "셰프"
@@ -18,10 +19,6 @@ class UserLoginResponseSchema(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
-
-    class Config:
-        orm_mode = True
-
 
 class RefreshTokenRequestSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")

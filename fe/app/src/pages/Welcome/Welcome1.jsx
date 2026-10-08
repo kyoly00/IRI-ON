@@ -47,6 +47,7 @@ export default function Welcome1() {
         // ✅ user_id 저장
         localStorage.setItem("user_id", String(data.user_id));
         if (data.access_token) localStorage.setItem("access_token", data.access_token);
+        if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
         
         if (isSignUp) {
           alert("회원가입이 완료되었습니다! 맞춤 프로필을 설정해주세요.");

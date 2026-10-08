@@ -1,190 +1,156 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import "./Profile_modify.css";
-import baby from "../../assets/baby.png";
 import { api, authFetch } from "../../lib/api";
+import {
+  AGE_GROUPS,
+  ALLERGY_OPTIONS,
+  AVATARS,
+  DIET_OPTIONS,
+  SAFETY_TOOLS,
+  SKILL_LEVELS,
+  SUPERVISION_LEVELS,
+  presetAvatar,
+  responseError,
+  toggleListValue,
+} from "../../lib/profile-options";
 
-// 레벨 이미지
-import Lv1 from "../../assets/Level/Lv1.png";
-import Lv2 from "../../assets/Level/Lv2.png";
-import Lv3 from "../../assets/Level/Lv3.png";
-import Lv4 from "../../assets/Level/Lv4.png";
-import Lv5 from "../../assets/Level/Lv5.png";
-import Lv6 from "../../assets/Level/Lv6.png";
-import Lv7 from "../../assets/Level/Lv7.png";
-import Lv8 from "../../assets/Level/Lv8.png";
-import Lv9 from "../../assets/Level/Lv9.png";
-import Lv10 from "../../assets/Level/Lv10.png";
+const emptyProfile = {
+  name: "셰프",
+  cooking_level: 1,
+  age_group: "unspecified",
+  supervision_level: "sometimes_help",
+  fire_skill: "with_help",
+  knife_skill: "with_help",
+  scissors_skill: "with_help",
+  peeler_skill: "with_help",
+  avatar_type: "preset",
+  avatar_value: "baby1",
+  avatar_url: null,
+  photo_consent_confirmed: false,
+  allergy_status: "unknown",
+  allergies: [],
+  dietary_restrictions: [],
+  disliked_ingredients: [],
+};
 
 export default function ProfileModify() {
-  const nav = useNavigate();
-  const loc = useLocation();
-
-  // ✅ userId: state > localStorage > ""
-  const userIdFromState = loc.state?.userId || null;
-  const [userId, setUserId] = useState(
-    userIdFromState || localStorage.getItem("user_id") || ""
-  );
-  useEffect(() => {
-    if (userIdFromState) {
-      localStorage.setItem("user_id", String(userIdFromState));
-      setUserId(String(userIdFromState));
-    }
-  }, [userIdFromState]);
-
-  // ✅ 이름(표시만) : localStorage → state → 기본값
-  const [name, setName] = useState(
-    localStorage.getItem("user_name") || loc.state?.name || "셰프얌"
-  );
-
-  // === 레벨 목록(가로 스크롤) ===
-  const LEVELS = useMemo(
-    () => [
-      { value: 1, title: "요린이", img: Lv1 },
-      { value: 2, title: "주방 탐험가", img: Lv2 },
-      { value: 3, title: "라면 박사", img: Lv3 },
-      { value: 4, title: "볶음밥의 지배자", img: Lv4 },
-      { value: 5, title: "고기 지옥의 장인", img: Lv5 },
-      { value: 6, title: "김밥집 사장님", img: Lv6 },
-      { value: 7, title: "맛의 연금술사", img: Lv7 },
-      { value: 8, title: "요리 전문가", img: Lv8 },
-      { value: 9, title: "요리 마스터", img: Lv9 },
-      { value: 10, title: "요리의 신", img: Lv10 },
-    ],
-    []
-  );
-  const [level, setLevel] = useState(() => {
-    const saved = Number(localStorage.getItem("profile_level") || "4");
-    return saved >= 1 && saved <= 10 ? saved : 4;
-  });
-  const pickLevel = (v) => {
-    setLevel(v);
-    localStorage.setItem("profile_level", String(v)); // DB 전송 없음
-  };
-
-  // === 안전 도구 ===
-  const [tools, setTools] = useState({
-    can_use_fire: false,
-    can_use_knife: false,
-    can_use_scissors: false,
-    can_use_peeler: false,
-  });
-  const toggleTool = (key) =>
-    setTools((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  // === 보유 도구 ===
-  const [toolsList, setToolsList] = useState([]);           // [{tool_id, name}]
+  // 서버 프로필을 단일 상태로 관리해 프리셋/업로드 아바타와 상세 설정을 함께 저장한다.
+  const [profile, setProfile] = useState(emptyProfile);
+  const [toolsList, setToolsList] = useState([]);
   const [selectedTools, setSelectedTools] = useState(new Set());
-  const toggleAppliance = (toolId) => {
-    setSelectedTools((prev) => {
-      const n = new Set(prev);
-      n.has(toolId) ? n.delete(toolId) : n.add(toolId);
-      return n;
-    });
-  };
-
-  // === 알레르기 ===
-  const allergyOptions = useMemo(
-    () => ["우유", "계란", "땅콩", "새우", "밀", "호두", "메밀", "대두", "복숭아"],
-    []
-  );
-  const [allergies, setAllergies] = useState([]);
-  const addAllergy = (item) => {
-    if (!item) return;
-    setAllergies((prev) => (prev.includes(item) ? prev : [...prev, item]));
-  };
-  const removeAllergy = (item) =>
-    setAllergies((prev) => prev.filter((x) => x !== item));
-
-  const goFridge = () => nav("/fridge");
-
-  // ✅ 저장 토스트(페이지 유지)
+  const [dislikedText, setDislikedText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const update = (key, value) =>
+    setProfile((current) => ({ ...current, [key]: value }));
+  const toggleProfileList = (key, value) =>
+    update(key, toggleListValue(profile[key], value));
+  const isChild = ["under_8", "8_13"].includes(profile.age_group);
+  const avatarSource =
+    profile.avatar_type === "upload" && profile.avatar_url
+      ? profile.avatar_url
+      : presetAvatar(profile.avatar_value);
 
-  // === 초기 데이터 로드 ===
   useEffect(() => {
+    // 화면 진입 시 공개 도구, 사용자 프로필, 사용자 보유 도구를 병렬로 불러온다.
     const load = async () => {
       try {
-        const resTools = await fetch(api(`/tools`));
-        if (resTools.ok) setToolsList(await resTools.json());
-
-        if (userId) {
-          const resProfile = await authFetch(`/users/profile`
-          );
-          if (resProfile.ok) {
-            const p = await resProfile.json();
-            if (p?.name) setName(p.name);
-            setTools({
-              can_use_fire: !!p?.can_use_fire,
-              can_use_knife: !!p?.can_use_knife,
-              can_use_scissors: !!p?.can_use_scissors,
-              can_use_peeler: !!p?.can_use_peeler,
-            });
-            const parsed =
-              typeof p?.allergy === "string"
-                ? p.allergy.split(",").map((s) => s.trim()).filter(Boolean)
-                : [];
-            setAllergies(parsed);
-          }
-
-          const resMyTools = await authFetch(
-            `/users/tools`
-          );
-          if (resMyTools.ok) {
-            const my = await resMyTools.json();
-            const ids = Array.isArray(my)
-              ? my
-                  .map((x) =>
-                    typeof x === "number" ? x : x?.tool_id ?? x?.id ?? null
-                  )
-                  .filter((v) => Number.isInteger(v))
-              : [];
-            setSelectedTools(new Set(ids));
-          }
+        const [toolsResponse, profileResponse, myToolsResponse] =
+          await Promise.all([
+            fetch(api("/tools")),
+            authFetch("/users/profile"),
+            authFetch("/users/tools"),
+          ]);
+        if (toolsResponse.ok) setToolsList(await toolsResponse.json());
+        if (profileResponse.ok) {
+          const loaded = await profileResponse.json();
+          setProfile({ ...emptyProfile, ...loaded });
+          setDislikedText((loaded.disliked_ingredients || []).join(", "));
         }
-      } catch (e) {
-        console.error(e);
+        if (myToolsResponse.ok) {
+          const items = await myToolsResponse.json();
+          setSelectedTools(
+            new Set(
+              items.map((item) =>
+                typeof item === "number" ? item : item.tool_id,
+              ),
+            ),
+          );
+        }
+      } catch (error) {
+        console.error(error);
       }
     };
     load();
-  }, [userId]);
+  }, []);
 
-  // === 저장(서버 반영) – 페이지/상태 유지(하이라이트 그대로) ===
-  const submitProfile = async () => {
-    if (!userId) return alert("user_id가 없습니다. 로그인부터 진행해주세요.");
+  const save = async () => {
+    // avatar_url은 만료되는 표시용 URL이므로 저장 payload에서는 제외한다.
+    if (!profile.name.trim()) return alert("닉네임을 입력해주세요.");
+    setSaving(true);
     try {
-      const profilePayload = {
-        name,
-        ...tools,
-        allergy: allergies.join(","),
+      const payload = {
+        ...profile,
+        name: profile.name.trim(),
+        avatar_url: undefined,
+        disliked_ingredients: dislikedText
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
       };
-      const res1 = await authFetch(
-        `/users/profile`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(profilePayload),
-        }
-      );
-      if (!res1.ok) throw new Error("프로필 저장 실패");
-
-      const toolPayload = Array.from(selectedTools).map((id) => ({ tool_id: id }));
-      const res2 = await authFetch(
-        `/users/tools`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(toolPayload),
-        }
-      );
-      if (!res2.ok) throw new Error("도구 저장 실패");
-
-      // ✅ 여기서 상태 변화 없음 → 기존 active/selected 색상 그대로 유지됨
+      const profileResponse = await authFetch("/users/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!profileResponse.ok)
+        throw await responseError(profileResponse, "프로필 저장 실패");
+      const toolsResponse = await authFetch("/users/tools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          [...selectedTools].map((tool_id) => ({ tool_id })),
+        ),
+      });
+      if (!toolsResponse.ok)
+        throw await responseError(toolsResponse, "조리도구 저장 실패");
+      localStorage.setItem("user_name", profile.name.trim());
+      localStorage.setItem("profile_level", String(profile.cooking_level));
       setShowToast(true);
-      setTimeout(() => setShowToast(false), 1500);
-    } catch (e) {
-      console.error(e);
-      alert("프로필/도구 저장 중 오류: " + e.message);
+      setTimeout(() => setShowToast(false), 1600);
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadImage = async (event) => {
+    // 실제 파일 검증·EXIF 제거·리사이즈는 신뢰 가능한 백엔드에서 다시 수행한다.
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (isChild && !profile.photo_consent_confirmed)
+      return alert("보호자 확인에 동의한 뒤 사진을 등록해주세요.");
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      form.append("consent_confirmed", String(profile.photo_consent_confirmed));
+      const response = await authFetch("/users/avatar", {
+        method: "POST",
+        body: form,
+      });
+      if (!response.ok) throw await responseError(response, "이미지 등록 실패");
+      const data = await response.json();
+      setProfile((current) => ({ ...current, ...data }));
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -192,154 +158,245 @@ export default function ProfileModify() {
     <div className="pm-page">
       <header className="pm-header">
         <h1>요리 프로필 수정하기</h1>
-        <p>
-          더 자세히 알려주시면 가볍고 안전하고
-          <br />
-          최고의 맞춤 메뉴를 추천해 드립니다!
-        </p>
+        <p>안전 설정과 취향을 바꾸면 추천과 조리 안내에 반영돼요.</p>
       </header>
 
-      {/* 상단 아바타 + 이름(표시만) */}
-      <section className="pm-hero-center">
-        <img src={baby} alt="아바타" className="pm-avatar-lg" />
-        <div className="pm-name-pill">{name}</div>
+      {/* 아바타와 닉네임: 프리셋은 즉시 선택, 실제 사진은 별도 업로드 */}
+      <section className="pm-card pm-profile-card">
+        <img src={avatarSource} alt="프로필 아바타" className="pm-avatar-lg" />
+        <input
+          className="pm-name-input"
+          value={profile.name}
+          maxLength={20}
+          onChange={(e) => update("name", e.target.value)}
+        />
+        <div className="pm-avatar-grid">
+          {AVATARS.map((avatar) => (
+            <button
+              type="button"
+              key={avatar.value}
+              className={
+                profile.avatar_type === "preset" &&
+                profile.avatar_value === avatar.value
+                  ? "selected"
+                  : ""
+              }
+              onClick={() =>
+                setProfile((current) => ({
+                  ...current,
+                  avatar_type: "preset",
+                  avatar_value: avatar.value,
+                  avatar_url: null,
+                }))
+              }
+            >
+              <img src={avatar.src} alt={avatar.label} />
+            </button>
+          ))}
+        </div>
+        {isChild && (
+          <label className="pm-consent">
+            <input
+              type="checkbox"
+              checked={profile.photo_consent_confirmed}
+              onChange={(e) =>
+                update("photo_consent_confirmed", e.target.checked)
+              }
+            />{" "}
+            보호자가 실제 사진 등록을 확인했습니다.
+          </label>
+        )}
+        <label className="pm-upload">
+          {uploading ? "업로드 중..." : "내 사진 등록 (선택)"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={uploading}
+            onChange={uploadImage}
+          />
+        </label>
+        <small>사진 없이 캐릭터 아바타만 사용해도 됩니다. 최대 2MB.</small>
       </section>
 
-      {/* === 요리 레벨 선택(로컬 저장만) === */}
+      {/* 전 연령대와 요리 도움 수준 */}
+      <section className="pm-card">
+        <div className="pm-card-title">기본 설정</div>
+        <label className="pm-field">
+          연령대
+          <select
+            value={profile.age_group}
+            onChange={(e) => update("age_group", e.target.value)}
+          >
+            {AGE_GROUPS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="pm-field">
+          요리할 때 도움 수준
+          <select
+            value={profile.supervision_level}
+            onChange={(e) => update("supervision_level", e.target.value)}
+          >
+            {SUPERVISION_LEVELS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      {/* 사용자가 직접 선택하는 요리 레벨 */}
       <section className="pm-card">
         <div className="pm-card-title">
-          🎯 나의 요리 성장 레벨 : <b>Lv.{level}</b>
+          🎯 내가 생각하는 요리 레벨: Lv.{profile.cooking_level}
         </div>
-        <div className="pm-levels" role="listbox" aria-label="요리 레벨 선택">
-          {LEVELS.map((it) => (
+        <div className="pm-level-number-grid">
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((level) => (
             <button
-              key={it.value}
               type="button"
-              className={`pm-level-card ${level === it.value ? "selected" : ""}`}
-              onClick={() => pickLevel(it.value)}
-              aria-selected={level === it.value}
+              key={level}
+              className={profile.cooking_level === level ? "selected" : ""}
+              onClick={() => update("cooking_level", level)}
             >
-              <span className="pm-level-badge">Lv.{it.value}</span>
-              <img src={it.img} alt={it.title} className="pm-level-img" />
-              <div className="pm-level-title">{it.title}</div>
+              {level}
             </button>
           ))}
         </div>
       </section>
 
-      {/* === 안전 도구 === */}
+      {/* 위험 도구는 일괄 선택하지 않고 도구별 수준을 명시한다. */}
       <section className="pm-card">
-        <div className="pm-card-title">
-          <span className="pm-emoji">🛡️</span> 아래의 도구를 안전하게 사용할 수 있나요?
-        </div>
-        <div className="pm-grid-2">
-          <button
-            className={`pm-tool ${tools.can_use_fire ? "active" : ""}`}
-            onClick={() => toggleTool("can_use_fire")}
-            type="button"
-          >
-            <div className="pm-icon">🔥</div>
-            <div className="pm-tool-title">불</div>
-            <div className="pm-tool-sub">가스레인지</div>
-          </button>
-
-          <button
-            className={`pm-tool ${tools.can_use_knife ? "active" : ""}`}
-            onClick={() => toggleTool("can_use_knife")}
-            type="button"
-          >
-            <div className="pm-icon">🔪</div>
-            <div className="pm-tool-title">칼</div>
-            <div className="pm-tool-sub">날카로운 도구</div>
-          </button>
-
-          <button
-            className={`pm-tool ${tools.can_use_scissors ? "active" : ""}`}
-            onClick={() => toggleTool("can_use_scissors")}
-            type="button"
-          >
-            <div className="pm-icon">✂️</div>
-            <div className="pm-tool-title">가위</div>
-            <div className="pm-tool-sub">주방 가위</div>
-          </button>
-
-          <button
-            className={`pm-tool ${tools.can_use_peeler ? "active" : ""}`}
-            onClick={() => toggleTool("can_use_peeler")}
-            type="button"
-          >
-            <div className="pm-icon">🥕</div>
-            <div className="pm-tool-title">껍질 벗기는 칼</div>
-            <div className="pm-tool-sub">예: 감자칼</div>
-          </button>
-        </div>
+        <div className="pm-card-title">🛡️ 도구별 안전 수준</div>
+        {SAFETY_TOOLS.map(([key, icon, label]) => (
+          <div className="pm-safety-row" key={key}>
+            <strong>
+              {icon} {label}
+            </strong>
+            <div>
+              {SKILL_LEVELS.map(([value, text]) => (
+                <button
+                  type="button"
+                  key={value}
+                  className={profile[key] === value ? "selected" : ""}
+                  onClick={() => update(key, value)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
 
-      {/* === 보유 도구 === */}
+      {/* 보유 조리도구는 편의를 위해 전체 선택과 선택 해제를 제공한다. */}
       <section className="pm-card">
-        <div className="pm-card-title">어떤 조리도구를 가지고 있나요?</div>
+        <div className="pm-toolbar">
+          <span>보유 조리도구</span>
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedTools(new Set(toolsList.map((tool) => tool.tool_id)))
+            }
+          >
+            전체 선택
+          </button>
+          <button type="button" onClick={() => setSelectedTools(new Set())}>
+            선택 해제
+          </button>
+        </div>
         <div className="pm-grid-3">
           {toolsList.map((tool) => (
             <button
-              key={tool.tool_id}
               type="button"
-              className={`pm-appliance ${
-                selectedTools.has(tool.tool_id) ? "selected" : ""
-              }`}
-              onClick={() => toggleAppliance(tool.tool_id)}
+              key={tool.tool_id}
+              className={`pm-appliance ${selectedTools.has(tool.tool_id) ? "selected" : ""}`}
+              onClick={() =>
+                setSelectedTools((current) => {
+                  const next = new Set(current);
+                  next.has(tool.tool_id)
+                    ? next.delete(tool.tool_id)
+                    : next.add(tool.tool_id);
+                  return next;
+                })
+              }
             >
               {tool.name}
             </button>
           ))}
         </div>
-
-        <button type="button" className="pm-inline-cta" onClick={goFridge}>
-          나만의 냉장고 만들기 →
-        </button>
       </section>
 
-      {/* === 알레르기 === */}
+      {/* 먹거리 안전 및 추천 개인화를 위한 선택 정보 */}
       <section className="pm-card">
-        <div className="pm-card-title">
-          <span className="pm-emoji">⚠️</span> 피해야 할 음식이 있나요?
+        <div className="pm-card-title">알레르기</div>
+        <div className="pm-choice-row">
+          {[
+            ["none", "없어요"],
+            ["has", "있어요"],
+            ["unknown", "잘 모르겠어요"],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              className={profile.allergy_status === value ? "selected" : ""}
+              onClick={() => update("allergy_status", value)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-
-        <div className="pm-select-row">
-          <select
-            className="pm-select"
-            defaultValue=""
-            onChange={(e) => {
-              addAllergy(e.target.value);
-              e.target.value = "";
-            }}
-          >
-            <option value="" disabled>
-              알레르기 음식을 선택하세요
-            </option>
-            {allergyOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {allergies.length > 0 && (
-          <div className="pm-chips">
-            {allergies.map((a) => (
-              <span className="pm-chip" key={a} onClick={() => removeAllergy(a)}>
-                {a} ✕
-              </span>
+        {profile.allergy_status === "has" && (
+          <div className="pm-chip-options">
+            {ALLERGY_OPTIONS.map((item) => (
+              <button
+                type="button"
+                key={item}
+                className={profile.allergies.includes(item) ? "selected" : ""}
+                onClick={() => toggleProfileList("allergies", item)}
+              >
+                {item}
+              </button>
             ))}
           </div>
         )}
-
-        <button className="pm-submit" type="button" onClick={submitProfile}>
-          수정하기
-        </button>
+        <div className="pm-card-title pm-spaced">식이 제한</div>
+        <div className="pm-chip-options">
+          {DIET_OPTIONS.map((item) => (
+            <button
+              type="button"
+              key={item}
+              className={
+                profile.dietary_restrictions.includes(item) ? "selected" : ""
+              }
+              onClick={() => toggleProfileList("dietary_restrictions", item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <label className="pm-field">
+          먹고 싶지 않은 재료
+          <input
+            value={dislikedText}
+            onChange={(e) => setDislikedText(e.target.value)}
+            placeholder="예: 가지, 오이 (쉼표로 구분)"
+          />
+        </label>
       </section>
 
-      {showToast && <div className="pm-save-toast">수정 완료! 저장됨</div>}
+      <button
+        type="button"
+        className="pm-submit"
+        disabled={saving}
+        onClick={save}
+      >
+        {saving ? "저장 중..." : "프로필 저장"}
+      </button>
+      {showToast && <div className="pm-save-toast">저장되었습니다.</div>}
     </div>
   );
 }
