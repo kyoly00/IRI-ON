@@ -13,6 +13,7 @@
 import os
 from pathlib import Path
 from typing import Any, List, Dict, Optional
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 import httpx
@@ -471,7 +472,7 @@ async def mcp_web_search(request: WebSearchRequest) -> Dict[str, Any]:
         }
 
 
-# --------- Coupang 쇼핑 도구 (Selenium 기반) ---------
+# --------- Coupang 쇼핑 도구 ---------
 class OpenCoupangRequest(BaseModel):
     """쿠팡 검색 요청."""
     query: str  # 검색할 재료/상품명
@@ -479,26 +480,19 @@ class OpenCoupangRequest(BaseModel):
 
 @router.post("/mcp/tools/open_coupang")
 async def mcp_open_coupang(request: OpenCoupangRequest) -> Dict[str, Any]:
-    """
-    Selenium을 사용하여 쿠팡에서 재료를 검색합니다.
-    브라우저를 열어 쿠팡 검색 결과 페이지로 이동합니다.
-    """
-    from services.coupang_service import open_coupang_search
-    
-    try:
-        result = await open_coupang_search(request.query)
-        print(f"🛒 [Coupang] 검색: {request.query}")
-        return result
-    except Exception as e:
-        print(f"❌ [Coupang] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "query": request.query,
-            "error": str(e),
-            "message": f"쿠팡 검색 중 오류가 발생했어. 직접 쿠팡에서 '{request.query}'를 검색해봐.",
-        }
+    """사용자가 직접 열 수 있는 쿠팡 HTTPS 검색 URL을 반환합니다."""
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query is required")
+
+    # 배포 서버에서 Selenium/로컬 브라우저를 실행하지 않습니다. 프런트가
+    # 실제 사용자 클릭 링크로 표시해야 모바일 앱 링크 또는 기본 브라우저가 동작합니다.
+    return {
+        "success": True,
+        "query": query,
+        "url": f"https://www.coupang.com/np/search?q={quote_plus(query)}",
+        "message": f"쿠팡에서 '{query}' 검색 링크를 준비했어요.",
+    }
 
 
 # --------- Food Nutrition MCP Tool (k-mfds-fooddb) ---------

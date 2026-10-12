@@ -362,9 +362,6 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
         if (assistantEvent.type === "theme") {
           document.documentElement.dataset.theme = assistantEvent.theme || "light";
         }
-        if (assistantEvent.type === "open_url" && assistantEvent.url) {
-          window.open(assistantEvent.url, "_blank", "noopener,noreferrer");
-        }
         if (assistantEvent.type === "end_conversation") {
           void stopRef.current();
         }
