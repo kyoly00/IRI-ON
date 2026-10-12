@@ -10,6 +10,8 @@ numpy==2.2.2
 openai==1.99.9
 filetype==1.2.0
 Pillow==11.1.0
+easyocr==1.7.2
+opencv-python-headless==4.14.0.94
 pymysql==1.1.1
 requests==2.32.4
 sqlalchemy==2.0.41
@@ -21,6 +23,6 @@ wheel==0.45.1
 mcp==1.0.0
 # google-genai 1.30.0이 요구하는 범위(>=0.28.1)를 충족해 Docker/CI 의존성 설치를 보장합니다.
 httpx==0.28.1
-youtube-transcript-api==1.2.4
+yt-dlp==2026.8.19
 psycopg==3.3.6
 psycopg-binary==3.3.6
