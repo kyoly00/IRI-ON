@@ -318,8 +318,8 @@ pip install -r requirements-noise-suppression.txt
 | class/함수 | 호출자 | 역할 |
 |---|---|---|
 | `ProviderError` | provider 함수 | HTTP 상태, SSE JSON, TTS body 계약 위반을 runtime 공통 오류로 전달한다. |
-| `OpenAIHttpProviders.__init__()` | runtime, noise evaluator | 주입 client가 있으면 테스트/호환 서버 경계로 사용한다. 아니면 `OPENAI_API_KEY`, base URL, timeout으로 `httpx.AsyncClient`를 만든다. |
-| `close()` | runtime/evaluator | provider가 직접 만든 keep-alive client만 닫는다. 주입 client의 lifecycle은 호출자가 소유한다. |
+| `OpenAIHttpProviders.__init__()` | runtime, noise evaluator | 주입 client가 있으면 테스트/호환 서버 경계로 사용한다. 일반 세션은 base URL/API key/timeout별 공유 `httpx.AsyncClient`를 재사용한다. |
+| `close()` / `close_shared_clients()` | runtime/app lifespan | 개별 세션은 공유 pool을 닫지 않고, 애플리케이션 종료 시 pool 전체를 한 번 정리한다. 주입 client의 lifecycle은 호출자가 소유한다. |
 | `transcribe(pcm)` | `_process_audio_turn()`, noise evaluator | `_pcm_to_wav()` 후 `/audio/transcriptions`에 model과 한국어 설정으로 전송하고 text를 반환한다. |
 | `stream_chat(messages, tools)` | `_stream_one_llm_round()` | `/chat/completions` streaming 요청을 보내고 `data:` SSE frame을 JSON 단위로 yield한다. 최종 usage도 포함한다. |
 | `synthesize(text)` | `_tts_worker()` | `/audio/speech`에 문장과 voice를 보내 24 kHz raw PCM을 받는다. JSON/text 응답, 빈 body, 홀수 PCM byte를 오류로 차단한다. |
@@ -330,6 +330,10 @@ pip install -r requirements-noise-suppression.txt
 ```dotenv
 CUSTOM_VOICE_STT_MODEL=gpt-4o-mini-transcribe
 CUSTOM_VOICE_LLM_MODEL=gpt-4.1-mini
+CUSTOM_VOICE_ROUTER_MODEL=gpt-5-nano
+CUSTOM_VOICE_ROUTER_TIMEOUT=2.0
+CUSTOM_VOICE_NAVIGATION_REVIEW_TIMEOUT=2.0
+CUSTOM_VOICE_NAVIGATION_REVIEW_JOIN_MS=250
 CUSTOM_VOICE_TTS_MODEL=gpt-4o-mini-tts-2025-12-15
 CUSTOM_VOICE_TTS_VOICE=alloy
 CUSTOM_VOICE_PROVIDER_TIMEOUT=45

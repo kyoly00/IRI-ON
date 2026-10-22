@@ -204,6 +204,9 @@ def print_metrics_table(summary: dict[str, Any]) -> None:
     labels = [
         ("TTFT", "ttft (time_to_first_token)"),
         ("TTFA", "ttfa (time_to_first_audio)"),
+        ("Perceived server TTFA", "perceived_server_ttfa"),
+        ("Endpoint latency", "endpoint_latency"),
+        ("LLM first-token latency", "llm_first_token_latency"),
         ("STT latency", "stt_latency"),
         ("E2E turn latency", "e2e_turn_latency"),
         ("Barge-in latency", "barge_in_latency"),
@@ -257,6 +260,9 @@ def _summary_to_table_row(summary: dict[str, Any], evaluation_type: str) -> dict
     for prefix, key in (
         ("ttft_ms", "ttft (time_to_first_token)"),
         ("ttfa_ms", "ttfa (time_to_first_audio)"),
+        ("perceived_server_ttfa_ms", "perceived_server_ttfa"),
+        ("endpoint_latency_ms", "endpoint_latency"),
+        ("llm_first_token_latency_ms", "llm_first_token_latency"),
         ("stt_latency_ms", "stt_latency"),
         ("e2e_latency_ms", "e2e_turn_latency"),
         ("barge_in_latency_ms", "barge_in_latency"),

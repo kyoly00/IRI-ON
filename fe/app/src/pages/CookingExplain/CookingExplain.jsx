@@ -32,7 +32,8 @@ export default function CookingExplain() {
   const { id } = useParams();
   const navigate = useNavigate();
   const recipeId = Number(id);
-  const userId = Number(localStorage.getItem("user_id")) || 5;
+  const storedUserId = Number(localStorage.getItem("user_id"));
+  const userId = Number.isSafeInteger(storedUserId) && storedUserId > 0 ? storedUserId : undefined;
   const playerRef = useRef(null);
 
   const [recipe, setRecipe] = useState(null);

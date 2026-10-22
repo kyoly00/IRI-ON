@@ -17,9 +17,13 @@ class TurnTrace:
 
     turn_id: int
     speech_id: str
+    turn_type: str = "user_audio"
     user_speech_start_ts: Optional[float] = None
+    last_voice_ts: Optional[float] = None
+    endpoint_completed_ts: Optional[float] = None
     user_speech_end_ts: Optional[float] = None
     stt_completed_ts: Optional[float] = None
+    llm_requested_ts: Optional[float] = None
     first_token_ts: Optional[float] = None
     first_audio_ts: Optional[float] = None
     response_completed_ts: Optional[float] = None
@@ -29,6 +33,7 @@ class TurnTrace:
     agent_audio_duration_ms: Optional[float] = None
     input_tokens: int = 0
     output_tokens: int = 0
+    llm_rounds: int = 0
     user_transcript: Optional[str] = None
     agent_response: Optional[str] = None
     prosody: Optional[dict[str, Any]] = None
@@ -67,22 +72,30 @@ class CustomTraceStore:
 
         return self._active
 
-    def start_turn(self, speech_id: str, speech_started_ts: Optional[float] = None) -> TurnTrace:
+    def start_turn(
+        self,
+        speech_id: str,
+        speech_started_ts: Optional[float] = None,
+        turn_type: str = "user_audio",
+    ) -> TurnTrace:
         """음성이 검출된 순간 새 turn correlation 객체를 만든다."""
 
         trace = TurnTrace(
             turn_id=len(self.turns) + 1,
             speech_id=speech_id,
+            turn_type=turn_type,
             user_speech_start_ts=speech_started_ts or time.time(),
         )
         self._active = trace
         return trace
 
-    def finish_turn(self) -> None:
+    def finish_turn(self, turn: Optional[TurnTrace] = None) -> None:
         """완료된 turn을 순서대로 확정한다."""
 
-        if self._active is not None:
-            self.turns.append(self._active)
+        target = turn or self._active
+        if target is not None and target not in self.turns:
+            self.turns.append(target)
+        if target is not None and self._active is target:
             self._active = None
 
     def add_entry(self, role: str, content: str, metadata: Optional[dict[str, Any]] = None) -> None:

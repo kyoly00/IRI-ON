@@ -39,12 +39,20 @@ class AdaptiveEnergyEndpointDetector:
         self._voiced_run = 0
         self._silence_run = 0
         self._talking = False
+        self.last_voiced = False
+        self.speech_duration_ms = 0.0
+        self.silence_duration_ms = 0.0
 
     @property
     def talking(self) -> bool:
         """현재 detector가 사용자 발화 안에 있는지 반환한다."""
 
         return self._talking
+
+    @property
+    def current_utterance(self) -> bytes:
+        """Speech-start 이전 pre-roll을 포함한 현재 발화 snapshot."""
+        return bytes(self._speech)
 
     def reset(self) -> None:
         """연결은 유지한 채 현재 발화 관련 버퍼만 비운다."""
@@ -55,6 +63,9 @@ class AdaptiveEnergyEndpointDetector:
         self._voiced_run = 0
         self._silence_run = 0
         self._talking = False
+        self.last_voiced = False
+        self.speech_duration_ms = 0.0
+        self.silence_duration_ms = 0.0
 
     def push(self, pcm: bytes) -> list[AudioEvent]:
         """길이가 임의인 PCM 조각을 30 ms 프레임으로 정렬해 처리한다."""
@@ -80,6 +91,7 @@ class AdaptiveEnergyEndpointDetector:
             self._noise_rms = 0.96 * self._noise_rms + 0.04 * rms
         threshold = max(self.settings.vad_min_rms, self._noise_rms * self.settings.vad_noise_multiplier)
         voiced = rms >= threshold
+        self.last_voiced = voiced
 
         if not self._talking:
             self._pre_roll.append(frame)
@@ -89,19 +101,23 @@ class AdaptiveEnergyEndpointDetector:
                 self._speech.extend(b"".join(self._pre_roll))
                 self._pre_roll.clear()
                 self._silence_run = 0
-                return AudioEvent(kind="speech_start")
+                self.speech_duration_ms = len(self._pre_roll) * self.settings.input_frame_ms
+                self.silence_duration_ms = 0.0
+                return AudioEvent(kind="speech_start", utterance=bytes(self._speech))
             return None
 
         self._speech.extend(frame)
         self._silence_run = 0 if voiced else self._silence_run + 1
         speech_ms = len(self._speech) / 2 / self.settings.input_sample_rate * 1000.0
         silence_ms = self._silence_run * self.settings.input_frame_ms
+        self.speech_duration_ms = speech_ms
+        self.silence_duration_ms = silence_ms
 
         # 너무 긴 독백은 메모리 보호를 위해 강제로 닫고, 정상 발화는 지정 침묵에서 닫는다.
         reached_maximum = speech_ms >= self.settings.maximum_speech_ms
         reached_endpoint = (
             speech_ms >= self.settings.minimum_speech_ms
-            and silence_ms >= self.settings.endpoint_silence_ms
+            and silence_ms >= self.settings.endpoint_hard_silence_ms
         )
         if reached_endpoint or reached_maximum:
             utterance = bytes(self._speech)

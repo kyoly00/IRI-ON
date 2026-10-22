@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from routers import all_routers
+from custom_voice.providers import OpenAIHttpProviders
 
 logger = logging.getLogger("iri_on.request")
 HEALTH_CHECK_PATHS = frozenset({"/health", "/ready"})
@@ -47,9 +48,12 @@ logging.getLogger("uvicorn.access").addFilter(SuccessfulHealthCheckFilter())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """배포 시 운영 데이터를 시드하거나 변경하지 않도록 시작 처리를 비워 둡니다."""
+    """운영 데이터는 건드리지 않고 외부 provider 연결만 종료 시 정리합니다."""
     # Migrations and seed data run in explicit deployment jobs, not application startup.
-    yield
+    try:
+        yield
+    finally:
+        await OpenAIHttpProviders.close_shared_clients()
 
 
 app = FastAPI(debug=os.getenv("ENVIRONMENT", "development") != "production", lifespan=lifespan)
