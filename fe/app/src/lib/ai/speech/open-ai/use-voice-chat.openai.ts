@@ -731,6 +731,16 @@ export function useOpenAIVoiceChat(
                     data: videoUrl,
                   });
                 }
+
+                // 비동기 도구 응답에서 window.open을 호출하면 모바일에서 팝업으로
+                // 차단됩니다. 페이지가 사용자 클릭 링크를 렌더링하도록 전달합니다.
+                if (toolName === "open_coupang" && toolResult.success && toolResult.url) {
+                  props?.onAssistantEvent?.({
+                    type: "open_url",
+                    url: toolResult.url,
+                    query: toolResult.query,
+                  });
+                }
               }
             }
           }

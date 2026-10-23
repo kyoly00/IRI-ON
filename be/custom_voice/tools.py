@@ -371,7 +371,10 @@ class ToolExecutor:
                     raise ValueError("query is required")
                 url = f"https://www.coupang.com/np/search?q={quote_plus(query)}"
                 await self._send_event(
-                    {"type": "assistant_event", "event": {"type": "open_url", "url": url}}
+                    {
+                        "type": "assistant_event",
+                        "event": {"type": "open_url", "url": url, "query": query},
+                    }
                 )
                 result = {"success": True, "query": query, "url": url}
             elif name == "searchFoodNutrition":
