@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -24,6 +25,7 @@ from .runtime import CustomVoiceRuntime
 # 기존 /assistant/openai-realtime 경로와 충돌하지 않는 독립 namespace를 사용한다.
 router = APIRouter(prefix="/custom-voice", tags=["custom-voice"])
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+logger = logging.getLogger("uvicorn.error")
 
 
 def _normalize_session_id(value: Optional[str]) -> str:
@@ -89,6 +91,7 @@ async def custom_voice_websocket(
         verify_ws_token(token, expected_user_id=user_id)
         await websocket.send_json({"type": "auth_success", "user_id": user_id})
     except (asyncio.TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        logger.warning("[CustomVoice] WebSocket authentication rejected user=%s: %s", user_id, exc)
         await websocket.close(code=4401, reason=f"Unauthorized: {exc}")
         return
 
@@ -103,10 +106,30 @@ async def custom_voice_websocket(
             settings=CustomVoiceSettings.from_env(),
             recipe_name=context.get("recipe_name"),
             materials=context.get("materials"),
+            recipe_metadata=context.get("recipe_metadata"),
+            steps=context.get("steps"),
         )
     except (LookupError, NoiseSuppressionError, ProviderError, ValueError) as exc:
         # handshake 이전 오류도 브라우저가 읽을 수 있는 JSON event로 변환한다.
         await websocket.send_json({"type": "error", "message": str(exc)})
         await websocket.close(code=1011)
+        return
+    except Exception:
+        logger.exception(
+            "[CustomVoice] session initialization failed user=%s recipe=%s",
+            user_id,
+            recipe_id,
+        )
+        try:
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "code": "session_initialization_failed",
+                    "message": "Custom voice session could not be initialized",
+                }
+            )
+            await websocket.close(code=1011, reason="Session initialization failed")
+        except Exception:
+            pass
         return
     await runtime.run()

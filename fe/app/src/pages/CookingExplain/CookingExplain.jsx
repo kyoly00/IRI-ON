@@ -28,6 +28,16 @@ const formatSeconds = (seconds) => {
   return `${minutes}:${String(remain).padStart(2, "0")}`;
 };
 
+const safeCoupangUrl = (value) => {
+  try {
+    const url = new URL(value);
+    const isCoupang = url.hostname === "coupang.com" || url.hostname.endsWith(".coupang.com");
+    return url.protocol === "https:" && isCoupang ? url.href : "";
+  } catch {
+    return "";
+  }
+};
+
 export default function CookingExplain() {
   const { id } = useParams();
   const location = useLocation();
@@ -43,6 +53,7 @@ export default function CookingExplain() {
   const [error, setError] = useState("");
   const [embedError, setEmbedError] = useState(false);
   const [timelineGenerating, setTimelineGenerating] = useState(false);
+  const [shoppingLink, setShoppingLink] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +92,13 @@ export default function CookingExplain() {
   }, [steps.length]);
 
   const handleAssistantEvent = useCallback((event) => {
+    if (event.type === "open_url") {
+      const url = safeCoupangUrl(event.url);
+      if (url) {
+        setShoppingLink({ url, query: String(event.query || "재료") });
+      }
+      return;
+    }
     if (event.type === "video" && Number.isFinite(Number(event.step))) {
       moveToStep(Number(event.step) - 1);
       return;
@@ -308,6 +326,24 @@ export default function CookingExplain() {
 
       {voiceChat.error && <p className="voice-error">음성 연결 오류: {voiceChat.error.message}</p>}
       {latestText && <div className="assistant-bubble">🤖 {latestText}</div>}
+      {shoppingLink && (
+        <aside className="shopping-link-card" aria-live="polite">
+          <div>
+            <strong>{shoppingLink.query} 구매 링크를 준비했어요.</strong>
+            <span>버튼을 누르면 쿠팡 앱 또는 기본 브라우저로 이동해요.</span>
+          </div>
+          <a
+            href={shoppingLink.url}
+            target="_blank"
+            rel="noopener noreferrer external"
+          >
+            쿠팡에서 보기
+          </a>
+          <button type="button" onClick={() => setShoppingLink(null)} aria-label="구매 링크 닫기">
+            ×
+          </button>
+        </aside>
+      )}
 
       <details className="recipe-detail-card">
         <summary>재료와 조리도구 보기</summary>

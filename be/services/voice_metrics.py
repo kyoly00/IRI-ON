@@ -24,8 +24,11 @@ class TurnMetrics(BaseModel):
     """단일 대화 턴(Turn)의 성능 측정 지표."""
     turn_id: int
     user_speech_start_ts: Optional[float] = None     # 사용자 발화 시작 (Unix ts)
+    last_voice_ts: Optional[float] = None            # 마지막 voiced frame 추정 시점
+    endpoint_completed_ts: Optional[float] = None    # endpoint 확정 시점
     user_speech_end_ts: Optional[float] = None       # 사용자 발화 종료/VAD 감지 시점 (Unix ts)
     stt_completed_ts: Optional[float] = None         # STT 변환 완료 시점
+    llm_requested_ts: Optional[float] = None         # 첫 main LLM 요청 시점
     first_token_ts: Optional[float] = None           # LLM 첫 번째 토큰 도착 시점 (TTFT)
     first_audio_ts: Optional[float] = None           # 첫 번째 오디오 청크 도착/재생 시점 (TTFA)
     response_completed_ts: Optional[float] = None    # 전체 응답 완료 시점 (E2E End)
@@ -58,6 +61,25 @@ class TurnMetrics(BaseModel):
         """Time To First Audio (ms): 발화 종료 -> 첫 오디오 출력 (음성 체감 지연)."""
         if self.user_speech_end_ts and self.first_audio_ts:
             return max(0.0, (self.first_audio_ts - self.user_speech_end_ts) * 1000)
+        return None
+
+    @property
+    def perceived_server_ttfa_ms(self) -> Optional[float]:
+        """마지막 voiced frame부터 서버 첫 오디오까지의 지연."""
+        if self.last_voice_ts and self.first_audio_ts:
+            return max(0.0, (self.first_audio_ts - self.last_voice_ts) * 1000)
+        return None
+
+    @property
+    def endpoint_latency_ms(self) -> Optional[float]:
+        if self.last_voice_ts and self.endpoint_completed_ts:
+            return max(0.0, (self.endpoint_completed_ts - self.last_voice_ts) * 1000)
+        return None
+
+    @property
+    def llm_first_token_latency_ms(self) -> Optional[float]:
+        if self.llm_requested_ts and self.first_token_ts:
+            return max(0.0, (self.first_token_ts - self.llm_requested_ts) * 1000)
         return None
 
     @property
@@ -103,6 +125,19 @@ class TurnMetrics(BaseModel):
             "turn_id": self.turn_id,
             "ttft_ms": round(self.ttft_ms, 1) if self.ttft_ms is not None else None,
             "ttfa_ms": round(self.ttfa_ms, 1) if self.ttfa_ms is not None else None,
+            "perceived_server_ttfa_ms": (
+                round(self.perceived_server_ttfa_ms, 1)
+                if self.perceived_server_ttfa_ms is not None
+                else None
+            ),
+            "endpoint_latency_ms": (
+                round(self.endpoint_latency_ms, 1) if self.endpoint_latency_ms is not None else None
+            ),
+            "llm_first_token_latency_ms": (
+                round(self.llm_first_token_latency_ms, 1)
+                if self.llm_first_token_latency_ms is not None
+                else None
+            ),
             "stt_latency_ms": round(self.stt_latency_ms, 1) if self.stt_latency_ms is not None else None,
             "e2e_latency_ms": round(self.e2e_latency_ms, 1) if self.e2e_latency_ms is not None else None,
             "barge_in_latency_ms": round(self.barge_in_latency_ms, 1) if self.barge_in_latency_ms is not None else None,
@@ -237,6 +272,17 @@ class VoiceMetricsTracker:
         """세션 전체에 대한 핵심 평가지표 종합 요약 및 점수 산출."""
         ttft_list = [t.ttft_ms for t in self.turns if t.ttft_ms is not None]
         ttfa_list = [t.ttfa_ms for t in self.turns if t.ttfa_ms is not None]
+        perceived_ttfa_list = [
+            t.perceived_server_ttfa_ms
+            for t in self.turns
+            if t.perceived_server_ttfa_ms is not None
+        ]
+        endpoint_list = [t.endpoint_latency_ms for t in self.turns if t.endpoint_latency_ms is not None]
+        llm_first_token_list = [
+            t.llm_first_token_latency_ms
+            for t in self.turns
+            if t.llm_first_token_latency_ms is not None
+        ]
         stt_list = [t.stt_latency_ms for t in self.turns if t.stt_latency_ms is not None]
         e2e_list = [t.e2e_latency_ms for t in self.turns if t.e2e_latency_ms is not None]
         barge_in_list = [t.barge_in_latency_ms for t in self.turns if t.barge_in_latency_ms is not None]
@@ -276,6 +322,9 @@ class VoiceMetricsTracker:
             "latency_metrics_ms": {
                 "ttft (time_to_first_token)": self._calc_stats(ttft_list),
                 "ttfa (time_to_first_audio)": self._calc_stats(ttfa_list),
+                "perceived_server_ttfa": self._calc_stats(perceived_ttfa_list),
+                "endpoint_latency": self._calc_stats(endpoint_list),
+                "llm_first_token_latency": self._calc_stats(llm_first_token_list),
                 "stt_latency": self._calc_stats(stt_list),
                 "e2e_turn_latency": self._calc_stats(e2e_list),
                 "barge_in_latency": self._calc_stats(barge_in_list),
