@@ -10,96 +10,20 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import ctypes.util
-from dataclasses import dataclass
 from pathlib import Path
 import time
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable
 
 import numpy as np
 
-
-class NoiseSuppressionError(RuntimeError):
-    """선택형 네이티브 노이즈 억제 경계에서 발생하는 공통 오류다."""
-
-
-class NoiseSuppressorUnavailable(NoiseSuppressionError):
-    """선택한 네이티브 모델 또는 라이브러리를 사용할 수 없을 때 발생한다."""
-
-
-@dataclass(frozen=True)
-class AudioFrame:
-    """상관관계 추적 메타데이터를 포함한 모노 PCM16 전송 프레임 하나다."""
-
-    pcm: bytes
-    sample_rate: int
-    sequence: int
-    sample_index: int
-    timestamp: float
-
-    @property
-    def samples(self) -> int:
-        """PCM16 바이트 길이를 샘플 개수로 변환한다."""
-
-        return len(self.pcm) // 2
-
-    @property
-    def duration_ms(self) -> float:
-        """현재 프레임의 재생 시간을 밀리초로 반환한다."""
-
-        return self.samples / self.sample_rate * 1000.0 if self.sample_rate else 0.0
-
-
-@dataclass
-class NoiseSuppressionStats:
-    """trace 및 evaluator 비교를 위해 세션 동안 누적하는 실행 비용이다."""
-
-    mode: str
-    frames: int = 0
-    audio_ms: float = 0.0
-    processing_ms: float = 0.0
-    cpu_ms: float = 0.0
-    max_frame_latency_ms: float = 0.0
-    failures: int = 0
-
-    def record(self, frame: AudioFrame, wall_ms: float, cpu_ms: float) -> None:
-        """프레임 하나의 음성 길이, 처리 지연시간과 CPU 시간을 누적한다."""
-
-        self.frames += 1
-        self.audio_ms += frame.duration_ms
-        self.processing_ms += wall_ms
-        self.cpu_ms += cpu_ms
-        self.max_frame_latency_ms = max(self.max_frame_latency_ms, wall_ms)
-
-    def summary(self) -> dict[str, float | int | str]:
-        """누적값을 평균 지연시간, RTF, 처리 중 CPU 사용률로 요약한다."""
-
-        mean_ms = self.processing_ms / self.frames if self.frames else 0.0
-        rtf = self.processing_ms / self.audio_ms if self.audio_ms else 0.0
-        cpu_usage = self.cpu_ms / self.processing_ms * 100.0 if self.processing_ms else 0.0
-        return {
-            "mode": self.mode,
-            "frames": self.frames,
-            "audio_ms": round(self.audio_ms, 3),
-            "processing_latency_ms_mean": round(mean_ms, 3),
-            "processing_latency_ms_max": round(self.max_frame_latency_ms, 3),
-            "realtime_factor": round(rtf, 5),
-            "cpu_usage_pct_during_processing": round(cpu_usage, 2),
-            "failures": self.failures,
-        }
-
-
-@runtime_checkable
-class NoiseSuppressor(Protocol):
-    """구현 backend와 무관하게 런타임이 사용하는 비동기 노이즈 억제 계약이다."""
-
-    mode: str
-    stats: NoiseSuppressionStats
-
-    async def process(self, audio_frame: AudioFrame) -> AudioFrame:
-        """동일한 sample-rate 및 시간축 계약을 유지한 처리 프레임을 반환한다."""
-
-    async def close(self) -> None:
-        """음성 세션 하나가 소유한 네이티브 모델 상태를 해제한다."""
+from .noise_engine import (
+    AudioFrame,
+    NoiseSuppressionEngine,
+    NoiseSuppressionError,
+    NoiseSuppressionStats,
+    NoiseSuppressor,
+    NoiseSuppressorUnavailable,
+)
 
 
 class PassthroughNoiseSuppressor:
@@ -372,7 +296,7 @@ def create_noise_suppressor(
     *,
     rnnoise_library: str | None = None,
     deepfilternet_model: str | None = None,
-) -> NoiseSuppressor:
+) -> NoiseSuppressionEngine:
     """선택 모드의 구현을 만들되 선택형 의존성은 계속 지연 로딩한다."""
 
     normalized = mode.strip().lower()

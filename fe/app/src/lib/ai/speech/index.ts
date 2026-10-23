@@ -40,8 +40,10 @@ export type AssistantBridgeEvent =
   }
   | {
     type: "timer_complete";
+    timer_id?: string;
     step: number;
     time: number;
+    label?: string;
     message: string;
   }
   | {
@@ -73,6 +75,7 @@ export interface VoiceChatSession {
   isUserSpeaking: boolean;
   isAssistantSpeaking: boolean;
   isLoading: boolean;
+  isResponseHeld?: boolean;
   messages: UIMessageWithCompleted[];
   error: Error | null;
   sessionInfo: Record<string, any> | null;
@@ -80,6 +83,8 @@ export interface VoiceChatSession {
   stop: () => Promise<void>;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
+  holdResponses?: () => void;
+  releaseResponses?: () => void;
 }
 
 // 외부 MCP 인증정보는 브라우저로 보내지 않고 FastAPI의 function bridge를 사용한다.

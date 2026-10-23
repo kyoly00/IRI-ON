@@ -98,6 +98,7 @@ ehthumbs.db
 # ==============================================================================
 # 내부 테스트 및 스크립트 폴더
 be/tests/
+tests/
 
 # DB 마이그레이션 (로컬 Alembic 환경)
 be/alembic/
@@ -105,7 +106,8 @@ be/alembic.*
 
 # 내부 참고용 문서
 be/custom_voice/README.md
-docs/
+docs/*
+!docs/CUSTOM_VOICE_ARCHITECTURE.md
 
 # 의존성 및 패키지 텍스트 파일
 requirements-*.txt

@@ -16,15 +16,44 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from routers import all_routers
+from custom_voice.providers import OpenAIHttpProviders
 
 logger = logging.getLogger("iri_on.request")
+HEALTH_CHECK_PATHS = frozenset({"/health", "/ready"})
+
+
+class SuccessfulHealthCheckFilter(logging.Filter):
+    """정상 probe는 Uvicorn access log에서 제외하고 실패 응답은 보존합니다."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Uvicorn access logger args:
+        # (client_addr, method, full_path, http_version, status_code)
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 5:
+            return True
+
+        try:
+            path = str(args[2]).partition("?")[0]
+            status_code = int(args[4])
+        except (TypeError, ValueError):
+            return True
+
+        return path not in HEALTH_CHECK_PATHS or status_code >= 400
+
+
+# Render 등의 health probe가 Uvicorn access log를 채우지 않게 합니다.
+# CLI가 logging 설정을 마친 뒤 앱을 import하므로 여기서 추가한 filter가 유지됩니다.
+logging.getLogger("uvicorn.access").addFilter(SuccessfulHealthCheckFilter())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """배포 시 운영 데이터를 시드하거나 변경하지 않도록 시작 처리를 비워 둡니다."""
+    """운영 데이터는 건드리지 않고 외부 provider 연결만 종료 시 정리합니다."""
     # Migrations and seed data run in explicit deployment jobs, not application startup.
-    yield
+    try:
+        yield
+    finally:
+        await OpenAIHttpProviders.close_shared_clients()
 
 
 app = FastAPI(debug=os.getenv("ENVIRONMENT", "development") != "production", lifespan=lifespan)
@@ -42,7 +71,7 @@ async def production_security(request: Request, call_next):
     request.state.request_id = request_id
 
     # 헬스체크 및 OPTIONS는 Rate Limiting 제외
-    is_exempt = request.method == "OPTIONS" or request.url.path in {"/health", "/ready"}
+    is_exempt = request.method == "OPTIONS" or request.url.path in HEALTH_CHECK_PATHS
     if not is_exempt:
         window = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
         maximum = int(os.getenv("RATE_LIMIT_REQUESTS", "120"))
@@ -71,19 +100,21 @@ async def production_security(request: Request, call_next):
             content={"error": "Internal Server Error", "request_id": request_id},
         )
 
-    # 구조화 로그에는 비밀값·본문·토큰을 기록하지 않습니다.
-    logger.info(
-        json.dumps(
-            {
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status": response.status_code,
-                "latency_ms": round((time.monotonic() - started_at) * 1000, 2),
-            },
-            ensure_ascii=False,
+    # 정상 health probe는 반복 로그에서 제외하되 실패 응답은 반드시 남깁니다.
+    if request.url.path not in HEALTH_CHECK_PATHS or response.status_code >= 400:
+        # 구조화 로그에는 비밀값·본문·토큰을 기록하지 않습니다.
+        logger.info(
+            json.dumps(
+                {
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": response.status_code,
+                    "latency_ms": round((time.monotonic() - started_at) * 1000, 2),
+                },
+                ensure_ascii=False,
+            )
         )
-    )
     _apply_security_headers(response, request_id)
     return response
 
