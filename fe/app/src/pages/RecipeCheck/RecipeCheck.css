@@ -1,2 +1,214 @@
-.recipe-check-page{height:100%;min-height:0;overflow-y:auto;padding:24px 20px 130px;background:#fffaf4;color:#3e3028}.recipe-check-page h1{text-align:center}.recipe-check-page label{display:grid;gap:8px;margin:20px 0;font-weight:700}.recipe-check-page select{padding:12px;border:1px solid #ffd2b3;border-radius:12px;background:#fff}.check-item{display:grid;gap:5px;margin:10px 0;padding:13px;border-radius:13px;background:#fff}.check-item.shortage{border:1px solid #ff9844;background:#fff3e9}.check-item span{font-size:13px;color:#75665c}.check-item b{font-size:13px;color:#e56d24}.primary{width:100%;margin-top:18px;padding:14px;border:0;border-radius:24px;background:#ff9844;color:#fff;font-weight:800}.back{border:0;background:none;color:#c26529}.notice{text-align:center;color:#a84c24}
-.serving-guide{text-align:center;color:#75665c;line-height:1.5}
+/* RecipeCheck.css */
+.recipe-check-page {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #fffaf4;
+  color: #3e3028;
+  padding: 20px 18px calc(40px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.check-top-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.back-btn {
+  border: 0;
+  background: none;
+  color: #c26529;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.check-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.recipe-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #33261d;
+  margin: 0 0 8px;
+  line-height: 1.3;
+}
+
+.serving-guide {
+  font-size: 14px;
+  color: #75665c;
+  margin: 0 0 16px;
+  line-height: 1.4;
+}
+
+.serving-selector-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #ffffff;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: 1px solid #fedbc5;
+  box-shadow: 0 2px 8px rgba(229, 109, 36, 0.06);
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.serving-label {
+  font-size: 15px;
+  font-weight: bold;
+  color: #5a4537;
+}
+
+.serving-select {
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  border: 1px solid #f9bd97;
+  border-radius: 10px;
+  background: #fff7f0;
+  color: #d85c18;
+  cursor: pointer;
+  outline: none;
+}
+
+.ingredient-list-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #4b3d33;
+  margin: 16px 0 12px;
+}
+
+.loading-text,
+.empty-text {
+  text-align: center;
+  color: #8c7b70;
+  padding: 24px 0;
+  font-size: 14px;
+}
+
+.ingredient-items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.check-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #f2e6dc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: transform 0.15s ease;
+}
+
+.check-item.shortage {
+  border: 1.5px solid #ff9844;
+  background: #fff6ee;
+}
+
+.check-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ingredient-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #33261d;
+}
+
+.badge {
+  font-size: 13px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.badge.shortage {
+  color: #e56d24;
+  background: #ffe6d4;
+}
+
+.badge.sufficient {
+  color: #2ea043;
+  background: #e6f7eb;
+}
+
+.ingredient-detail {
+  font-size: 13px;
+  color: #75665c;
+}
+
+.notice-message {
+  text-align: center;
+  color: #d85c18;
+  font-weight: bold;
+  font-size: 14px;
+  margin: 14px 0 0;
+  padding: 10px;
+  background: #fff0e3;
+  border-radius: 10px;
+}
+
+/* 하단 액션 버튼들 */
+.check-actions-wrapper {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 20px;
+}
+
+.purchase-btn {
+  width: 100%;
+  padding: 13px;
+  border: 1.5px solid #ff9844;
+  border-radius: 20px;
+  background: #fff;
+  color: #e56d24;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.purchase-btn:active {
+  background: #fff1e5;
+}
+
+.start-cooking-primary-btn {
+  width: 100%;
+  padding: 15px;
+  border: 0;
+  border-radius: 24px;
+  background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 152, 68, 0.35);
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.start-cooking-primary-btn:active {
+  transform: scale(0.98);
+}

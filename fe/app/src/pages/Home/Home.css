@@ -1,16 +1,10 @@
 /* 전체 페이지 */
 .home-page {
-  min-height: 100vh;
+  min-height: 100%;
   background: #fbf7ef;
   padding-bottom: 90px;
   font-family: 'omyu_pretty', sans-serif;
-
-  -ms-overflow-style: none;   /* IE/Edge */
-  scrollbar-width: none;      /* Firefox */
-  overflow-y: scroll;         /* 스크롤 유지하되 감춤 */
-
 }
-.home-page::-webkit-scrollbar { display: none; }
 
 /* 상단 바 */
 .home-top {
