@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import YouTube from "react-youtube";
 import { FaPlay, FaRedo, FaStop } from "react-icons/fa";
 
@@ -40,10 +40,11 @@ const safeCoupangUrl = (value) => {
 
 export default function CookingExplain() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const recipeId = Number(id);
-  const storedUserId = Number(localStorage.getItem("user_id"));
-  const userId = Number.isSafeInteger(storedUserId) && storedUserId > 0 ? storedUserId : undefined;
+  const servings = Math.min(50, Math.max(1, Number(new URLSearchParams(location.search).get("servings")) || 0)) || undefined;
+  const userId = Number(localStorage.getItem("user_id")) || 5;
   const playerRef = useRef(null);
 
   const [recipe, setRecipe] = useState(null);
@@ -58,7 +59,7 @@ export default function CookingExplain() {
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(api(`/recipes/${recipeId}`))
+    fetch(api(`/recipes/${recipeId}${servings ? `?servings=${servings}` : ""}`))
       .then(async (response) => {
         if (!response.ok) throw new Error("레시피를 불러오지 못했어요.");
         return response.json();
@@ -76,7 +77,7 @@ export default function CookingExplain() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [recipeId]);
+  }, [recipeId, servings]);
 
   const steps = recipe?.steps || [];
   const activeStep = steps[currentStep] || null;
@@ -346,8 +347,12 @@ export default function CookingExplain() {
 
       <details className="recipe-detail-card">
         <summary>재료와 조리도구 보기</summary>
-        <h3>재료</h3>
-        <p>{recipe.materials || "등록된 재료가 없어요."}</p>
+        <h3>재료 {recipe.servings ? `(${recipe.servings}인분 기준)` : ""}</h3>
+        {recipe.ingredients?.length ? (
+          <ul className="ingredient-list">
+            {recipe.ingredients.map((ingredient) => <li key={ingredient.ingredient_id}>{ingredient.name} <b>{ingredient.quantity}{ingredient.unit}</b></li>)}
+          </ul>
+        ) : <p>{recipe.materials || "등록된 재료가 없어요."}</p>}
         <h3>조리도구</h3>
         <p>{recipe.tools || "등록된 조리도구가 없어요."}</p>
         {recipe.tips && <><h3>팁</h3><p>{recipe.tips}</p></>}

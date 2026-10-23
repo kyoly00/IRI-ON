@@ -1,17 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./Menu.css";
 import { FaSearch, FaClock } from "react-icons/fa";
 import { api, authFetch } from "../../lib/api";
+import youtubeLoading from "../../assets/youtube_loading.png";
 
 const categories = ["전체", "한식", "중식", "일식", "양식", "간식", "기타"];
 
 export default function Menu() {
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const autoStartName = query.get("autostart");
+  const autoStartRecipeId = Number(query.get("autostartId")) || null;
   const [menuList, setMenuList] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [viewMode, setViewMode] = useState("전체"); // 전체 or 맞춤형
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => query.get("search") || "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -22,6 +27,7 @@ export default function Menu() {
   const [youtubeImporting, setYoutubeImporting] = useState(false);
   const [youtubeMessage, setYoutubeMessage] = useState("");
   const [youtubeOpen, setYoutubeOpen] = useState(false);
+  const autoStarted = useRef(false);
   const navigate = useNavigate();
 
   // ✅ 메뉴 불러오기
@@ -45,6 +51,7 @@ export default function Menu() {
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
       const data = await res.json();
       setMenuList(data);
+      return data;
     } catch (err) {
       console.error("❌ 메뉴 불러오기 실패:", err);
       setError("메뉴를 불러오지 못했어요. 백엔드 연결을 확인해 주세요.");
@@ -56,10 +63,19 @@ export default function Menu() {
   // 처음 전체 메뉴 불러오기
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      fetchMenus(viewMode, searchTerm, selectedCategory);
+      fetchMenus(viewMode, searchTerm, selectedCategory).then((recipes) => {
+        if (!autoStartName || autoStarted.current || !recipes) return;
+        const matched = recipes.find((recipe) => recipe.name === autoStartName)
+          || recipes.find((recipe) => recipe.recipe_id === autoStartRecipeId)
+          || (autoStartRecipeId ? { recipe_id: autoStartRecipeId } : null);
+        if (matched) {
+          autoStarted.current = true;
+          navigate(`/CookingExplain/${matched.recipe_id}`);
+        }
+      });
     }, searchTerm ? 250 : 0);
     return () => window.clearTimeout(timer);
-  }, [viewMode, searchTerm, selectedCategory]);
+  }, [viewMode, searchTerm, selectedCategory, autoStartName, autoStartRecipeId, navigate]);
 
   // ✅ 보기 모드 변경
   const handleViewModeChange = (mode) => {
@@ -96,7 +112,7 @@ export default function Menu() {
     }
     const optionalNumber = (value) => (value === "" ? undefined : Number(value));
     setYoutubeImporting(true);
-    setYoutubeMessage("");
+    setYoutubeMessage("영상 길이와 자막 상태에 따라 최대 1~2분 정도 걸릴 수 있어요. 잠시만 기다려 주세요.");
     try {
       const response = await authFetch("/recipes/import-youtube", {
         method: "POST",
@@ -117,7 +133,12 @@ export default function Menu() {
       // 중복이면 새 row를 만들지 않고, 이미 검증된 기존 레시피로 바로 안내한다.
       navigate(`/CookingExplain/${recipeId}`);
     } catch (reason) {
-      setYoutubeMessage(reason.message || "영상 레시피를 만들지 못했어요.");
+      const detail = reason?.message;
+      setYoutubeMessage(
+        detail && detail !== "Failed to fetch"
+          ? `영상 레시피를 가져오지 못했어요. ${detail}`
+          : "영상 레시피를 가져오지 못했어요. 네트워크 연결과 공개된 YouTube 링크인지 확인한 뒤 다시 시도해 주세요."
+      );
     } finally {
       setYoutubeImporting(false);
     }
@@ -156,7 +177,7 @@ export default function Menu() {
 
       <section className="youtube-import-card" aria-label="YouTube 영상 레시피 등록">
         <h3>YouTube 링크로 바로 요리하기</h3>
-        <p>자막과 조리 단계를 검증한 뒤 레시피를 만들고 음성 보조 화면으로 이동해요.</p>
+        <p>자막과 조리 단계를 검증한 뒤 레시피를 만들어요. 영상 길이·자막 상태에 따라 1~2분 걸릴 수 있으며, 가져올 수 없으면 이유를 안내해 드려요.</p>
         <button
           type="button"
           className="youtube-import-toggle"
@@ -194,6 +215,7 @@ export default function Menu() {
         </form>
         )}
         {youtubeMessage && <p className="youtube-import-message">{youtubeMessage}</p>}
+        {youtubeImporting && <div className="youtube-loading" role="status" aria-live="polite"><img src={youtubeLoading} alt=""/><strong>영상 확인 중이에요</strong><span>자막과 조리 과정을 확인하고 있어요. 잠시만 기다려 주세요.</span></div>}
       </section>
 
       {/* 카테고리 */}

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from decimal import Decimal
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from models.recipe.recipe import Recipe
@@ -66,7 +67,7 @@ def get_recipe_by_id(db: Session, recipe_id: int) -> Optional[dict]:
     return recipe_summary(recipe) if recipe else None
 
 
-def get_recipe_detail(db: Session, recipe_id: int) -> Optional[dict]:
+def get_recipe_detail(db: Session, recipe_id: int, servings: Optional[int] = None) -> Optional[dict]:
     recipe = get_recipe_model_by_id(db, recipe_id)
     if not recipe:
         return None
@@ -104,10 +105,21 @@ def get_recipe_detail(db: Session, recipe_id: int) -> Optional[dict]:
             for index, text in enumerate(parse_recipe_steps(recipe.instructions), start=1)
         ]
 
+    base_servings = recipe.servings or 1
+    requested_servings = servings or base_servings
+    scale = Decimal(requested_servings) / Decimal(base_servings)
+    ingredients = (
+        db.query(RecipeIngredient)
+        .filter(RecipeIngredient.recipe_id == recipe_id)
+        .order_by(RecipeIngredient.ingredient_id)
+        .all()
+    )
+
     return {
         **recipe_summary(recipe),
         "description": recipe.description or "",
-        "servings": recipe.servings,
+        "servings": requested_servings,
+        "base_servings": base_servings,
         "materials": recipe.materials or "",
         "tools": recipe.tools or "",
         "tips": recipe.tips or "",
@@ -115,6 +127,15 @@ def get_recipe_detail(db: Session, recipe_id: int) -> Optional[dict]:
         "video_id": extract_video_id(recipe.video_url),
         "timeline_ready": timeline_ready,
         "steps": steps,
+        "ingredients": [
+            {
+                "ingredient_id": ingredient.ingredient_id,
+                "name": ingredient.ingredient.name,
+                "quantity": float((ingredient.quantity or 1) * scale),
+                "unit": ingredient.unit or "piece",
+            }
+            for ingredient in ingredients
+        ],
     }
 
 def get_recipe_by_name(db: Session, name: str) -> RecipeSchema:

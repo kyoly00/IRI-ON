@@ -1,7 +1,8 @@
 /* ====== Menu 전용 스코프 ====== */
 .menu-page {
   background: #faf7f0;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;           /* 터치 스크롤 허용 */
@@ -135,6 +136,9 @@
 }
 .menu-page .youtube-import-card button:disabled { opacity: .6; cursor: wait; }
 .menu-page .youtube-import-message { margin-top: 8px !important; color: #9b4a12 !important; }
+.menu-page .youtube-loading { display:grid; justify-items:center; gap:5px; margin-top:12px; padding:12px; border-radius:12px; background:#fff1e4; color:#9b4a12; text-align:center; }
+.menu-page .youtube-loading img { width:86px; height:86px; object-fit:contain; }
+.menu-page .youtube-loading span { font-size:12px; color:#78675b; }
 
 /* 카테고리 바 */
 .menu-page .category-bar {
@@ -271,7 +275,7 @@
 }
 
 .menu-page .start-btn {
-  width: 327px;
+  width: min(327px, calc(100vw - 40px));
   height: 56px;
   background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
   box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.35);

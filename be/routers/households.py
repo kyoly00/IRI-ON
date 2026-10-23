@@ -75,6 +75,10 @@ def upsert_item(db: Session, household_id: int, data: FridgeItemInputSchema, sou
     ingredient = get_or_create_ingredient(db, data)
     item = db.query(FridgeItem).filter_by(household_id=household_id, ingredient_id=ingredient.ingredient_id).first()
     if item:
+        # 간편 입력은 중복 탭해도 재료를 다시 추가하지 않는다. 수량을 명시한
+        # Vision/기존 클라이언트 요청만 기존의 수량 합산 규칙을 적용한다.
+        if "quantity" not in data.model_fields_set:
+            return item
         added = converted(data.quantity, data.unit, item.unit)
         if added is None:
             raise HTTPException(status_code=422, detail=f"{ingredient.name}의 기존 단위({item.unit})와 합칠 수 없습니다.")
@@ -180,6 +184,16 @@ def update_fridge_item(household_id: int, fridge_item_id: int, payload: FridgeIt
     db.commit()
     db.refresh(item)
     return item_dict(item)
+
+
+@router.delete("/{household_id}/fridge-items/{fridge_item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_fridge_item(household_id: int, fridge_item_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    member_for(db, household_id, current_user.user_id)
+    item = db.query(FridgeItem).filter_by(household_id=household_id, fridge_item_id=fridge_item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="냉장고 재료를 찾을 수 없습니다.")
+    db.delete(item)
+    db.commit()
 
 
 MAX_IMAGE_DIMENSION = 4096
