@@ -1,14 +1,10 @@
-body {
-  background: #fff8ef;   /* 전체 배경 */
-}
-
 .personal-page {
   width: 100%;
-
   background: #fff8ef;
-  min-height: 100vh;
+  min-height: 100%;
   overflow-x: hidden;
   box-sizing: border-box;
+  padding-bottom: 30px;
 }
 
 

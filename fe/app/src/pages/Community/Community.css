@@ -1,20 +1,12 @@
 /* 전체 래퍼 (배경, 중앙정렬) */
 .cm-wrap {
-  min-height: 100vh;
+  min-height: 100%;
   background: #fbf7ef;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding-bottom: 40px;
-  font-family: 'Pretendard', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
-   overflow-x: hidden;        /* 가로 스크롤 제거 */
-  overflow-y: auto;          /* 세로 스크롤은 유지 */
-
-  -ms-overflow-style: none;  /* IE, Edge에서 스크롤바 숨김 */
-  scrollbar-width: none;     /* Firefox에서 스크롤바 숨김 */
-  -webkit-overflow-scrolling: touch;
   font-family: 'omyu_pretty', sans-serif;
-
 }
 
 .cm-wrap::-webkit-scrollbar {

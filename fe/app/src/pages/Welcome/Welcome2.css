@@ -1,13 +1,11 @@
 .w2-page {
-  min-height: 100vh;
+  min-height: 100%;
   padding: 20px 16px 36px;
   background: #fff7ee;
   display: flex;
   flex-direction: column;
   gap: 14px;
   align-items: center;
-
-  overflow-y: auto; /* 페이지 전체에 세로 스크롤 */
 }
 
 .w2-header {

@@ -1,14 +1,11 @@
 /* ====== Menu 전용 스코프 ====== */
 .menu-page {
   background: #faf7f0;
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;           /* 터치 스크롤 허용 */
-  -ms-overflow-style: none;   /* IE/Edge 스크롤바 제거 */
-  scrollbar-width: none;      /* Firefox 스크롤바 제거 */
-  position: relative;         /* 하단 버튼 기준용 */
+  position: relative;
+  padding-bottom: 90px;
 }
 
 .menu-page::-webkit-scrollbar {
@@ -266,17 +263,24 @@
 
 /* 하단 버튼 */
 .menu-page .bottom-btn-wrapper {
-  position: fixed;                /* 전역 fixed지만 클래스 스코프라 영향 없음 */
-  bottom: calc(120px + env(safe-area-inset-bottom, 0px)); /* 하단바 여유 */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-  width: auto;
+  position: fixed;
+  bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  max-width: 500px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  z-index: 150;
+  pointer-events: none;
+  padding: 0 20px;
+  box-sizing: border-box;
 }
 
 .menu-page .start-btn {
-  width: min(327px, calc(100vw - 40px));
-  height: 56px;
+  width: min(327px, 100%);
+  height: 54px;
   background: linear-gradient(92.74deg, #ffb173 9.43%, #ff9844 96.54%);
   box-shadow: 0px 8px 16px rgba(253, 160, 85, 0.35);
   border-radius: 100px;
@@ -288,9 +292,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .menu-page .start-btn:disabled {
-  opacity: .5;
-  cursor: default;
+  display: none;
 }
