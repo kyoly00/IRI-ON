@@ -5,11 +5,13 @@ from __future__ import annotations
 import ast
 import html
 import json
+import logging
 import math
 import os
 import re
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -21,6 +23,9 @@ from sqlalchemy.orm import Session
 
 from models.recipe.recipe import Category, Difficulty, Recipe
 from models.recipe.recipe_step import RecipeStep
+
+
+logger = logging.getLogger(__name__)
 
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -439,6 +444,7 @@ def youtube_source_workspace(
         max(10 * 1024 * 1024, int(os.getenv("YOUTUBE_RECIPE_MAX_VIDEO_MB", "250")) * 1024 * 1024),
     )
 
+    source_started_at = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="iri_on_youtube_") as temporary_directory:
         temporary_path = Path(temporary_directory)
         try:
@@ -463,9 +469,16 @@ def youtube_source_workspace(
                 options["format"] = "worstvideo[height>=240][height<=480]/bestvideo[height<=480]/worstvideo"
 
             with yt_dlp.YoutubeDL(options) as ydl:
+                logger.info("youtube_source_metadata_started video_id=%s", expected_video_id or "unknown")
                 # process=False로 먼저 목록만 확인해야 자동 번역 자막 요청을 만들지 않는다.
                 info = ydl.extract_info(video_url, download=False, process=False) or {}
                 duration = float(info.get("duration") or 0)
+                logger.info(
+                    "youtube_source_metadata_completed video_id=%s elapsed_seconds=%.2f video_seconds=%.0f",
+                    expected_video_id or info.get("id") or "unknown",
+                    time.monotonic() - source_started_at,
+                    duration,
+                )
                 if duration > max_video_seconds:
                     raise RuntimeError(
                         f"영상이 너무 깁니다 ({duration:.0f}초). 최대 {max_video_seconds}초까지 처리할 수 있습니다."
@@ -478,6 +491,12 @@ def youtube_source_workspace(
                 ydl.params["writeautomaticsub"] = bool(subtitle_languages)
                 # 선택 자막의 429가 OCR용 영상 다운로드까지 중단시키지 않게 한다.
                 ydl.params["ignoreerrors"] = True
+                logger.info(
+                    "youtube_source_subtitles_started video_id=%s languages=%s ocr_enabled=%s",
+                    expected_video_id or info.get("id") or "unknown",
+                    ",".join(subtitle_languages),
+                    ocr_enabled,
+                )
                 processed_info = ydl.process_ie_result(info, download=True)
                 if isinstance(processed_info, dict):
                     info = processed_info
@@ -536,9 +555,18 @@ def youtube_source_workspace(
             title = _bounded_text(info.get("title"), 200)
             description = _bounded_text(info.get("description"), 4_000)
             uploader = _bounded_text(info.get("uploader") or info.get("channel"), 120)
-        except RuntimeError:
+        except RuntimeError as exc:
+            logger.warning(
+                "youtube_source_failed video_id=%s elapsed_seconds=%.2f error_type=%s error=%s",
+                expected_video_id or "unknown", time.monotonic() - source_started_at,
+                type(exc).__name__, str(exc)[:300],
+            )
             raise
         except Exception as exc:
+            logger.exception(
+                "youtube_source_failed video_id=%s elapsed_seconds=%.2f error_type=%s",
+                expected_video_id or "unknown", time.monotonic() - source_started_at, type(exc).__name__,
+            )
             raise RuntimeError(f"yt-dlp/OCR로 YouTube 자료를 가져올 수 없습니다: {str(exc)[:1000]}") from exc
 
         pinned_comment, top_comments = _fetch_youtube_comments(video_url)
@@ -672,6 +700,14 @@ def split_transcript_with_llm(
         "schema": {
             "type": "object",
             "properties": {
+                "is_cooking_video": {
+                    "type": "boolean",
+                    "description": "True only when this is a video that teaches a cookable recipe. False for mukbang, music, vlogs, ads, reviews, or non-cooking food content.",
+                },
+                "rejection_reason": {
+                    "type": "string",
+                    "description": "Short Korean reason when is_cooking_video is false; otherwise an empty string.",
+                },
                 "recipe_name": {"type": "string"},
                 "description": {"type": "string"},
                 "materials": {"type": "array", "items": {"type": "string"}},
@@ -690,7 +726,7 @@ def split_transcript_with_llm(
                     },
                 }
             },
-            "required": ["recipe_name", "description", "materials", "tools", "tips", "steps"],
+            "required": ["is_cooking_video", "rejection_reason", "recipe_name", "description", "materials", "tools", "tips", "steps"],
             "additionalProperties": False,
         },
     }
@@ -747,19 +783,32 @@ def split_transcript_with_llm(
     # 외부 LLM이 지연되거나 일시적으로 실패해도 요청이 무한정 대기하지 않도록 제한한다.
     client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY"),
-        timeout=float(os.getenv("RECIPE_TIMELINE_TIMEOUT_SECONDS", "30")),
+        timeout=float(os.getenv("RECIPE_TIMELINE_TIMEOUT_SECONDS", "90")),
         max_retries=int(os.getenv("RECIPE_TIMELINE_MAX_RETRIES", "1")),
     )
+    resolved_model = model or os.getenv("RECIPE_TIMELINE_MODEL", "gpt-5-nano")
+    llm_started_at = time.monotonic()
+    logger.info(
+        "youtube_recipe_llm_started model=%s segments=%d transcript_characters=%d",
+        resolved_model, len(compacted), len(transcript_text),
+    )
     response = client.chat.completions.create(
-        model=model or os.getenv("RECIPE_TIMELINE_MODEL", "gpt-5-nano"),
+        model=resolved_model,
         messages=[
             {"role": "system", "content": "너는 아동 요리 교육 전문 타임라인 에디터다."},
             {"role": "user", "content": prompt},
         ],
         response_format={"type": "json_schema", "json_schema": schema},
     )
+    logger.info(
+        "youtube_recipe_llm_completed model=%s elapsed_seconds=%.2f",
+        resolved_model, time.monotonic() - llm_started_at,
+    )
     content = response.choices[0].message.content
     data = json.loads(content or "{}")
+    if not data.get("is_cooking_video", False):
+        reason = str(data.get("rejection_reason") or "조리 과정을 확인할 수 없습니다.").strip()
+        raise RuntimeError(f"COOKING_VIDEO_REQUIRED: {reason}")
     if metadata_out is not None:
         metadata_out.update(
             {

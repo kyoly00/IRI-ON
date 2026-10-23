@@ -98,13 +98,13 @@ export default function Home() {
         {/* 메뉴 카드 */}
 <div className="menu-list">
   {menus.map((menu) => (
-    <div key={menu.id} className="menu-card">
+    <button key={menu.id} type="button" className="menu-card" onClick={() => nav(`/menu?search=${encodeURIComponent(menu.name)}&autostart=${encodeURIComponent(menu.name)}&autostartId=${menu.id}`)}>
       <div className="thumb">{menu.thumb}</div>
       <div className="menu-name">{menu.name}</div>
       <div className="menu-meta">
         <FiClock /> {menu.time}
       </div>
-    </div>
+    </button>
   ))}
 </div>
 

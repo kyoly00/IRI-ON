@@ -12,6 +12,13 @@ class RecipeStepSchema(BaseModel):
     start_seconds: Optional[int] = None
     step_len: Optional[int] = None
 
+
+class RecipeIngredientSchema(BaseModel):
+    ingredient_id: int
+    name: str
+    quantity: float
+    unit: str = "piece"
+
 class RecipeSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -35,6 +42,7 @@ class RecipeDetailSchema(RecipeSchema):
     video_id: Optional[str] = None
     timeline_ready: bool = False
     steps: list[RecipeStepSchema] = Field(default_factory=list)
+    ingredients: list[RecipeIngredientSchema] = Field(default_factory=list)
 
 
 class YouTubeRecipeImportSchema(BaseModel):
