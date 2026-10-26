@@ -24,6 +24,8 @@ wheel==0.45.1
 mcp==1.0.0
 # google-genai 1.30.0이 요구하는 범위(>=0.28.1)를 충족해 Docker/CI 의존성 설치를 보장합니다.
 httpx==0.28.1
-yt-dlp==2026.8.19
+# YouTube의 player 응답 변경을 신속히 반영하도록 빌드 때 최신 안정판을 설치한다.
+# default extra는 YouTube 추출에 권장되는 추가 의존성을 함께 설치한다.
+yt-dlp[default]>=2026.8.19
 psycopg==3.3.6
 psycopg-binary==3.3.6
