@@ -7,6 +7,7 @@ import type {
   VoiceChatSession,
 } from "../index.js";
 import { api, ws } from "../../../api.js";
+import { requestMicrophone } from "../microphone.js";
 
 
 /** Custom cascade WebSocket에서 브라우저로 보내는 protocol v1 event. */
@@ -713,7 +714,7 @@ export function useCustomCascadeVoiceChat(props?: VoiceChatOptions): VoiceChatSe
       noiseMode === "rnnoise" || noiseMode === "deepfilternet" ? 48_000 : 16_000
     );
     const frameMs = Number(sessionInfo.input_frame_ms) || 20;
-    const mediaStream = await navigator.mediaDevices.getUserMedia({
+    const mediaStream = await requestMicrophone({
       audio: {
         channelCount: 1,
         // Deep NS와 browser NS를 겹치지 않는다. Deep mode는 AEC만 browser에 남긴다.

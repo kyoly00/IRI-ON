@@ -15,6 +15,7 @@ import {
   type OpenAIRealtimeSession,
 } from "./openai-realtime-event";
 import { api } from "../../../api";
+import { requestMicrophone } from "../microphone.js";
 
 type Content =
   | {
@@ -294,7 +295,7 @@ export function useOpenAIVoiceChat(
   const startListening = useCallback(async () => {
     try {
       if (!audioStream.current) {
-        audioStream.current = await navigator.mediaDevices.getUserMedia({
+        audioStream.current = await requestMicrophone({
           audio: true,
         });
       }
@@ -939,6 +940,11 @@ export function useOpenAIVoiceChat(
     setError(null);
     setMessages([]);
     try {
+      // Ask for microphone permission directly from the user's click. Awaiting
+      // the session API first loses user activation on some mobile browsers.
+      if (!audioStream.current) {
+        audioStream.current = await requestMicrophone({ audio: true });
+      }
       const session = await createSession();
       const sessionToken = (session as any).value || session.client_secret?.value;
       if (!sessionToken) {
@@ -958,11 +964,6 @@ export function useOpenAIVoiceChat(
           audioElement.current.srcObject = e.streams[0];
         }
       };
-      if (!audioStream.current) {
-        audioStream.current = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-      }
       tracks.current = [];
       audioStream.current.getTracks().forEach((track) => {
         const sender = pc.addTrack(track, audioStream.current!);
@@ -1048,6 +1049,8 @@ export function useOpenAIVoiceChat(
       await pc.setRemoteDescription(answer);
       peerConnection.current = pc;
     } catch (err) {
+      audioStream.current?.getTracks().forEach((track) => track.stop());
+      audioStream.current = null;
       setError(err instanceof Error ? err : new Error(String(err)));
       setIsActive(false);
       setIsListening(false);
