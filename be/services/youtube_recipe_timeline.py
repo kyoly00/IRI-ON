@@ -390,6 +390,7 @@ def _fetch_youtube_comments(video_url: str) -> tuple[str, tuple[str, ...]]:
         options = {
             "quiet": True,
             "no_warnings": True,
+            "js_runtimes": {"deno": {}},
             "skip_download": True,
             "getcomments": True,
             "noplaylist": True,
@@ -445,6 +446,10 @@ def youtube_source_workspace(
             options = {
                 "quiet": True,
                 "no_warnings": True,
+                # YouTube now serves player challenges that yt-dlp must execute.
+                # The Render image provides Deno; declaring it explicitly also
+                # makes a missing runtime visible instead of silently degrading.
+                "js_runtimes": {"deno": {}},
                 # 길이를 확인한 뒤 60초 미만 영상에만 다운로드를 활성화한다.
                 "skip_download": True,
                 # 메타데이터 확인 후 원본 언어 한 종류만 선택한다.

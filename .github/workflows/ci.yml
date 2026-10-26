@@ -33,10 +33,14 @@ jobs:
       - run: pip-audit -r requirements.txt
       - run: cd be && alembic upgrade head && pytest -q
       - uses: actions/setup-node@v4
-        with: {node-version: '20', cache: npm, cache-dependency-path: fe/app/package-lock.json}
+        with: {node-version: '24', cache: npm, cache-dependency-path: fe/app/package-lock.json}
       - run: npm ci && npm run lint && npm run build
         working-directory: fe/app
       - run: docker build -t iri-on:${{ github.sha }} .
+      - name: Verify YouTube extraction runtime in container
+        run: |
+          docker run --rm --entrypoint deno iri-on:${{ github.sha }} --version
+          docker run --rm --entrypoint python iri-on:${{ github.sha }} -c "import yt_dlp; print(yt_dlp.version.__version__)"
       - name: Scan container image for critical and high vulnerabilities
         uses: aquasecurity/trivy-action@0.32.0
         with:
