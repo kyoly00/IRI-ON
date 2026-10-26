@@ -114,8 +114,9 @@ export default function Menu() {
       const recipeId = data.recipe?.recipe_id;
       if (!recipeId) throw new Error("생성된 레시피 정보를 받지 못했어요.");
       setYoutubeMessage(data.message || "레시피를 준비했어요.");
-      // 중복이면 새 row를 만들지 않고, 이미 검증된 기존 레시피로 바로 안내한다.
-      navigate(`/CookingExplain/${recipeId}`);
+      // 영상 레시피도 일반 메뉴와 동일하게 인분 선택 및 냉장고 재료 확인을
+      // 거친 뒤 조리를 시작한다.
+      navigate(`/recipes/${recipeId}/check`);
     } catch (reason) {
       setYoutubeMessage(reason.message || "영상 레시피를 만들지 못했어요.");
     } finally {
