@@ -237,6 +237,10 @@ def select_tool_schemas(transcript: str) -> list[dict[str, Any]]:
         wanted.add("navigate_cooking_step")
     if any(token in text for token in ("영상보여", "영상틀어", "영상켜")):
         wanted.add("send_video_url")
+    # "영상 3단계 부분 보여줘"처럼 단계 번호가 끼어 있는 요청도
+    # 해당 단계의 start_seconds로 플레이어를 이동시켜야 한다.
+    if "영상" in text and ("보여" in text or "단계" in text):
+        wanted.add("send_video_url")
     if any(token in text for token in ("구매", "주문", "쿠팡", "사줘")):
         wanted.add("open_coupang")
     return [schema for schema in TOOL_SCHEMAS if schema["function"]["name"] in wanted]

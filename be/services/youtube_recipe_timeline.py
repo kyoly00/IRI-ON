@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import html
 import json
+import logging
 import math
 import os
 import re
@@ -22,6 +23,8 @@ from sqlalchemy.orm import Session
 from models.recipe.recipe import Category, Difficulty, Recipe
 from models.recipe.recipe_step import RecipeStep
 
+
+logger = logging.getLogger(__name__)
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 NOISE_TOKEN_PATTERN = re.compile(
@@ -53,6 +56,12 @@ class YouTubeSourceData:
     chapters: tuple[str, ...] = ()
     pinned_comment: str = ""
     top_comments: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TranscriptApiFetchResult:
+    segments: list[TranscriptSegment]
+    status: str
 
 
 class YouTubeRecipeDuplicateError(RuntimeError):
@@ -262,6 +271,85 @@ def _deduplicate_subtitle_segments(segments: list[TranscriptSegment]) -> list[Tr
     return result
 
 
+def _classify_transcript_api_error(error: Exception) -> str:
+    name = error.__class__.__name__.lower()
+    if any(token in name for token in ("requestblocked", "ipblocked", "toomanyrequests")):
+        return "access_blocked"
+    if any(token in name for token in ("transcriptsdisabled", "notranscriptfound")):
+        return "no_transcript"
+    if "videounavailable" in name:
+        return "video_unavailable"
+    return "request_failed"
+
+
+def _classify_yt_dlp_error(error: Exception) -> str:
+    message = str(error).lower()
+    if any(token in message for token in (
+        "not a bot", "sign in to confirm", "http error 429", "too many requests", "request blocked",
+    )):
+        return "access_blocked"
+    if any(token in message for token in ("private video", "video unavailable", "not available")):
+        return "video_unavailable"
+    return "request_failed"
+
+
+def _youtube_source_error_message(primary_status: str, fallback_status: str) -> str:
+    if primary_status == "access_blocked" and fallback_status == "no_transcript":
+        return "YouTube 서버 요청이 차단되었고, 이 영상의 공개 자막도 찾지 못했습니다. 자막이 있는 다른 요리 영상으로 시도해 주세요."
+    if primary_status == "access_blocked" or fallback_status == "access_blocked":
+        return "YouTube 서버 요청 접근이 차단되었습니다. 잠시 후 다시 시도하거나 다른 요리 영상으로 시도해 주세요."
+    if primary_status == "video_unavailable" or fallback_status == "video_unavailable":
+        return "현재 재생할 수 없거나 비공개인 YouTube 영상입니다. 공개된 요리 영상 링크를 넣어 주세요."
+    if primary_status == "no_transcript" or fallback_status == "no_transcript":
+        return "이 영상에는 가져올 수 있는 공개 자막이 없습니다. 자막이 있는 다른 요리 영상으로 시도해 주세요."
+    return "YouTube 자막을 가져오지 못했습니다. 잠시 후 다시 시도하거나 다른 요리 영상으로 시도해 주세요."
+
+
+def _fetch_transcript_api_segments(video_id: str) -> TranscriptApiFetchResult:
+    """Fallback for public captions when yt-dlp cannot access YouTube metadata."""
+
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+
+        proxy_url = os.getenv("YOUTUBE_PROXY_URL", "").strip()
+        if proxy_url:
+            from youtube_transcript_api.proxies import GenericProxyConfig
+
+            transcript_api = YouTubeTranscriptApi(
+                proxy_config=GenericProxyConfig(http_url=proxy_url, https_url=proxy_url),
+            )
+        else:
+            transcript_api = YouTubeTranscriptApi()
+        transcript = transcript_api.fetch(
+            video_id,
+            languages=["ko", "ko-KR", "en", "en-US", "en-GB"],
+        )
+    except Exception as exc:
+        return TranscriptApiFetchResult([], _classify_transcript_api_error(exc))
+
+    segments: list[TranscriptSegment] = []
+    for snippet in transcript:
+        if isinstance(snippet, dict):
+            text_value = snippet.get("text")
+            start_value = snippet.get("start")
+            duration_value = snippet.get("duration")
+        else:
+            text_value = getattr(snippet, "text", "")
+            start_value = getattr(snippet, "start", 0)
+            duration_value = getattr(snippet, "duration", 0)
+        text = _clean_subtitle_text(str(text_value or ""))
+        if not text:
+            continue
+        try:
+            start = max(0.0, float(start_value or 0))
+            duration = max(0.1, float(duration_value or 0))
+        except (TypeError, ValueError):
+            continue
+        segments.append(TranscriptSegment(text=text, start=start, duration=duration))
+    segments = _deduplicate_subtitle_segments(segments)
+    return TranscriptApiFetchResult(segments, "ok" if segments else "no_transcript")
+
+
 def _subtitle_preference(path: Path) -> tuple[int, int]:
     """한국어, 영어, 기타 언어 순서와 json3, vtt 순서로 자막을 고른다."""
 
@@ -382,7 +470,9 @@ def _extract_ocr_segments(video_path: Path) -> list[TranscriptSegment]:
 def _fetch_youtube_comments(video_url: str) -> tuple[str, tuple[str, ...]]:
     """댓글은 선택 참고자료이므로 실패해도 전체 가져오기를 실패시키지 않는다."""
 
-    if os.getenv("YOUTUBE_RECIPE_FETCH_COMMENTS", "true").lower() not in {"1", "true", "yes"}:
+    # Comments are optional and require another YouTube request. Keep them
+    # opt-in in production to reduce rate-limit and bot-detection pressure.
+    if os.getenv("YOUTUBE_RECIPE_FETCH_COMMENTS", "false").lower() not in {"1", "true", "yes"}:
         return "", ()
     try:
         import yt_dlp
@@ -398,6 +488,9 @@ def _fetch_youtube_comments(video_url: str) -> tuple[str, tuple[str, ...]]:
                 "youtube": {"max_comments": ["10"], "comment_sort": ["top"]},
             },
         }
+        proxy_url = os.getenv("YOUTUBE_PROXY_URL", "").strip()
+        if proxy_url:
+            options["proxy"] = proxy_url
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(video_url, download=False) or {}
         comments = info.get("comments") or []
@@ -439,6 +532,7 @@ def youtube_source_workspace(
         1_000 * 1024 * 1024,
         max(10 * 1024 * 1024, int(os.getenv("YOUTUBE_RECIPE_MAX_VIDEO_MB", "250")) * 1024 * 1024),
     )
+    proxy_url = os.getenv("YOUTUBE_PROXY_URL", "").strip()
 
     with tempfile.TemporaryDirectory(prefix="iri_on_youtube_") as temporary_directory:
         temporary_path = Path(temporary_directory)
@@ -463,10 +557,11 @@ def youtube_source_workspace(
                 "retries": 2,
                 "max_filesize": max_video_bytes,
             }
+            if proxy_url:
+                options["proxy"] = proxy_url
             if ocr_requested:
                 # OCR에는 음성이 필요하지 않으므로 480p 이하 영상 스트림만 받는다.
                 options["format"] = "worstvideo[height>=240][height<=480]/bestvideo[height<=480]/worstvideo"
-
             with yt_dlp.YoutubeDL(options) as ydl:
                 # process=False로 먼저 목록만 확인해야 자동 번역 자막 요청을 만들지 않는다.
                 info = ydl.extract_info(video_url, download=False, process=False) or {}
@@ -527,12 +622,20 @@ def youtube_source_workspace(
                 ocr_segments = _extract_ocr_segments(video_files[0])
 
             if not subtitle_segments and not ocr_segments:
-                available = sorted(set((info.get("subtitles") or {})) | set((info.get("automatic_captions") or {})))
-                available_text = ", ".join(available[:12]) or "없음"
-                raise RuntimeError(
-                    "자막과 화면 OCR에서 레시피에 사용할 텍스트를 찾지 못했습니다. "
-                    f"사용 가능한 YouTube 자막 언어: {available_text}"
+                fallback = _fetch_transcript_api_segments(
+                    expected_video_id or extract_video_id(video_url) or ""
                 )
+                if fallback.segments:
+                    subtitle_segments = fallback.segments
+                else:
+                    primary_status = "no_transcript"
+                    logger.warning(
+                        "youtube_source_failed video_id=%s yt_dlp_status=%s transcript_api_status=%s",
+                        expected_video_id or extract_video_id(video_url) or "unknown",
+                        primary_status,
+                        fallback.status,
+                    )
+                    raise RuntimeError(_youtube_source_error_message(primary_status, fallback.status))
 
             chapters = tuple(
                 text for item in (info.get("chapters") or [])
@@ -544,7 +647,26 @@ def youtube_source_workspace(
         except RuntimeError:
             raise
         except Exception as exc:
-            raise RuntimeError(f"yt-dlp/OCR로 YouTube 자료를 가져올 수 없습니다: {str(exc)[:1000]}") from exc
+            primary_status = _classify_yt_dlp_error(exc)
+            fallback = _fetch_transcript_api_segments(
+                expected_video_id or extract_video_id(video_url) or ""
+            )
+            if fallback.segments:
+                logger.info(
+                    "youtube_source_fallback_used video_id=%s yt_dlp_status=%s transcript_segments=%s",
+                    expected_video_id or extract_video_id(video_url) or "unknown",
+                    primary_status,
+                    len(fallback.segments),
+                )
+                yield YouTubeSourceData(segments=fallback.segments)
+                return
+            logger.warning(
+                "youtube_source_failed video_id=%s yt_dlp_status=%s transcript_api_status=%s",
+                expected_video_id or extract_video_id(video_url) or "unknown",
+                primary_status,
+                fallback.status,
+            )
+            raise RuntimeError(_youtube_source_error_message(primary_status, fallback.status)) from exc
 
         pinned_comment, top_comments = _fetch_youtube_comments(video_url)
         source = YouTubeSourceData(
